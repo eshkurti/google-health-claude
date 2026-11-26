@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import time
+from dataclasses import dataclass
 from datetime import date
 from typing import Any, Callable
+from urllib.parse import quote
 
 import requests
 
@@ -22,6 +24,14 @@ class HealthApiError(RuntimeError):
         self.status = status
         self.message = message
         self.url = url
+
+
+@dataclass(frozen=True)
+class RawReply:
+    """A non-JSON reply (e.g. a TCX file): HTTP status and the body as bytes."""
+
+    status: int
+    content: bytes
 
 
 def civil_date_time(day: date) -> dict[str, Any]:
@@ -102,12 +112,17 @@ class HealthClient:
 
     # -- HTTP -----------------------------------------------------------
 
-    def _request(self, method: str, url: str, **kwargs: Any) -> dict[str, Any]:
+    def _send(self, method: str, url: str, accept: str = "application/json", **kwargs: Any) -> Any:
+        """Send with auth, one refresh on 401, and backoff on 429/5xx/network errors.
+
+        Returns the final response whatever its status; raises only when no
+        response could be obtained at all.
+        """
         refreshed = False
         for attempt in range(self._max_retries + 1):
             can_retry = attempt < self._max_retries
             try:
-                headers = {"Authorization": f"Bearer {self._token()}", "Accept": "application/json"}
+                headers = {"Authorization": f"Bearer {self._token()}", "Accept": accept}
                 resp = self._session.request(method, url, headers=headers, timeout=60, **kwargs)
             except requests.RequestException as err:
                 # Timeouts and dropped connections (also during token refresh).
@@ -122,18 +137,22 @@ class HealthClient:
             if resp.status_code in (429, 500, 502, 503, 504) and can_retry:
                 self._sleep(2**attempt)
                 continue
-            if resp.status_code >= 400:
-                raise HealthApiError(resp.status_code, _error_message(resp), url)
-            if not resp.content:
-                return {}
-            try:
-                body = resp.json()
-            except ValueError as err:
-                raise HealthApiError(resp.status_code, "response is not valid JSON", url) from err
-            if not isinstance(body, dict):
-                raise HealthApiError(resp.status_code, "response is not a JSON object", url)
-            return body
+            return resp
         raise HealthApiError(0, "retries exhausted", url)
+
+    def _request(self, method: str, url: str, **kwargs: Any) -> dict[str, Any]:
+        resp = self._send(method, url, **kwargs)
+        if resp.status_code >= 400:
+            raise HealthApiError(resp.status_code, _error_message(resp), url)
+        if not resp.content:
+            return {}
+        try:
+            body = resp.json()
+        except ValueError as err:
+            raise HealthApiError(resp.status_code, "response is not valid JSON", url) from err
+        if not isinstance(body, dict):
+            raise HealthApiError(resp.status_code, "response is not a JSON object", url)
+        return body
 
     # -- API methods ----------------------------------------------------
 
@@ -159,6 +178,19 @@ class HealthClient:
             if not token:
                 return points
             params = {**params, "pageToken": token}
+
+    def export_exercise_tcx(self, exercise_id: str, partial_data: bool = False) -> RawReply:
+        """Raw TCX export of one exercise session (unverified against the live API).
+
+        Unlike the JSON methods this does not raise on 4xx/5xx: the caller gets
+        the status and body so a probe can report what the API said.
+        """
+        url = f"{API_BASE}/users/me/dataTypes/exercise/dataPoints/{quote(exercise_id, safe='')}:exportExerciseTcx"
+        params = {"alt": "media"}
+        if partial_data:
+            params["partialData"] = "true"
+        resp = self._send("GET", url, accept="*/*", params=params)
+        return RawReply(resp.status_code, resp.content or b"")
 
     def daily_rollup(self, data_type: str, start: date, end_exclusive: date) -> list[dict[str, Any]]:
         """One aggregated point per civil day in [start, end_exclusive)."""

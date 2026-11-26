@@ -59,6 +59,10 @@ python -m google_health_claude auth --client-secret path\to\client_secret.json
 # 2. check which data types your device supports (prints one line per type)
 python -m google_health_claude probe --client-secret path\to\client_secret.json
 
+# optional: export a stored GPS run, strength session and passive walk as TCX and
+# describe the files (structure only; raw replies go to the git-ignored samples\tcx)
+python -m google_health_claude probe-tcx --client-secret path\to\client_secret.json --data-dir path\to\data
+
 # 3. fetch the last 3 days, or a longer history
 python -m google_health_claude fetch --client-secret path\to\client_secret.json --data-dir path\to\data
 python -m google_health_claude backfill --client-secret path\to\client_secret.json --data-dir path\to\data --since 2026-09-01

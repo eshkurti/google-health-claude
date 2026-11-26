@@ -1,4 +1,4 @@
-"""Command line: auth | probe | fetch | backfill."""
+"""Command line: auth | probe | probe-tcx | fetch | backfill."""
 
 from __future__ import annotations
 
@@ -40,6 +40,20 @@ def build_parser() -> argparse.ArgumentParser:
     p_probe.add_argument("--date", type=_date, help="day to probe (default: yesterday)")
     p_probe.add_argument("--save-samples", type=Path, help="save raw responses here (contains health data!)")
 
+    p_tcx = sub.add_parser(
+        "probe-tcx",
+        help="export a stored GPS run, strength and passive walk as TCX and describe the files",
+    )
+    common(p_tcx)
+    p_tcx.add_argument(
+        "--data-dir", type=Path, required=True,
+        help="data repo root or its data/ folder; workouts are picked from workouts/*.json",
+    )
+    p_tcx.add_argument(
+        "--save-samples", type=Path, default=Path("samples") / "tcx",
+        help="where raw TCX replies are saved (contains health data!) (default: samples/tcx)",
+    )
+
     p_fetch = sub.add_parser("fetch", help="fetch the last N days (default 3) into --data-dir")
     common(p_fetch)
     p_fetch.add_argument("--data-dir", type=Path, required=True)
@@ -77,6 +91,11 @@ def main(argv: list[str] | None = None) -> int:
             day = args.date or today() - timedelta(days=1)
             return 1 if probe(client, day, args.save_samples) else 0
 
+        if args.command == "probe-tcx":
+            from .probe import probe_tcx
+
+            return 1 if probe_tcx(client, args.data_dir, args.save_samples) else 0
+
         if args.command == "fetch":
             end = args.end or today()
             start = end - timedelta(days=max(args.days, 1) - 1)
@@ -84,7 +103,7 @@ def main(argv: list[str] | None = None) -> int:
         else:
             end = args.until or today() - timedelta(days=1)
             report = fetch_range(client, args.since, end, args.data_dir, skip_existing=not args.force)
-    except (CredentialsError, AuthError) as err:
+    except (CredentialsError, AuthError, FileNotFoundError) as err:
         print(f"error: {err}", file=sys.stderr)
         return 1
 

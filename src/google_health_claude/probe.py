@@ -3,6 +3,10 @@
 Use it before the first real fetch. It prints one line per data type and can
 save the raw responses so the data format can be inspected. Saved samples
 contain personal health data, so keep them out of git.
+
+`probe-tcx`: export three stored workouts (GPS run, strength, passive walk) as
+TCX and report the file structure only (status, size, trackpoint counts, which
+fields are present, sampling interval, tag names). Never prints coordinates.
 """
 
 from __future__ import annotations
@@ -16,6 +20,7 @@ from typing import Any
 from .client import HealthApiError
 from .datatypes import LIST_SPECS, ROLLUP_SPECS
 from .fetch import list_for_day
+from .tcx import TARGETS, Workout, load_workouts, pick_workouts, summarize_tcx
 
 
 def probe(client: Any, day: date, save_dir: Path | None = None) -> int:
@@ -68,4 +73,69 @@ def probe(client: Any, day: date, save_dir: Path | None = None) -> int:
         client.refresh_token_expires_in,
         file=sys.stdout,
     )
+    return failures
+
+
+# -- probe-tcx ------------------------------------------------------------------
+
+ERROR_BODY_LIMIT = 2000
+
+
+def _error_body(content: bytes) -> str:
+    text = " ".join(content.decode("utf-8", errors="replace").split())
+    return text if len(text) <= ERROR_BODY_LIMIT else text[:ERROR_BODY_LIMIT] + "..."
+
+
+def _tcx_attempt(client: Any, workout: Workout, label: str, partial: bool, save_dir: Path) -> tuple[bool, int]:
+    """One export call. Returns (HTTP success, trackpoint count). Prints no values."""
+    name = "partialData=true" if partial else "default"
+    try:
+        reply = client.export_exercise_tcx(workout.exercise_id, partial_data=partial)
+    except HealthApiError as err:
+        print(f"  [{name}] request failed: {err}")
+        return False, 0
+
+    ok = 200 <= reply.status < 300
+    save_dir.mkdir(parents=True, exist_ok=True)
+    suffix = (".partialData" if partial else "") + (".tcx" if ok else ".error.txt")
+    path = save_dir / f"{label}{suffix}"
+    path.write_bytes(reply.content)
+
+    print(f"  [{name}] HTTP {reply.status}, {len(reply.content)} bytes, saved to {path}")
+    if not ok:
+        print(f"    error body: {_error_body(reply.content) or '(empty)'}")
+        return False, 0
+
+    s = summarize_tcx(reply.content)
+    if s.error:
+        print(f"    {s.error}")
+        return True, 0
+    n = s.trackpoints
+    print(f"    trackpoints: {n}")
+    print(f"    HeartRateBpm: {s.with_heart_rate}/{n}, Position: {s.with_position}/{n}, AltitudeMeters: {s.with_altitude}/{n}")
+    print(f"    interval between points: {s.interval_text()}")
+    print(f"    tags: {', '.join(s.tags)}")
+    return True, n
+
+
+def probe_tcx(client: Any, data_dir: Path, save_dir: Path) -> int:
+    """Export three sample workouts as TCX and describe their structure.
+
+    Returns the number of workouts that could not be found or whose final
+    export call failed. Coordinates and other values are never printed.
+    """
+    picked = pick_workouts(load_workouts(data_dir))
+    failures = 0
+    for target in TARGETS:
+        workout = picked[target.label]
+        print(f"\n{target.label}: {target.description}")
+        if workout is None:
+            print("  SKIP: no matching workout with a name in the data repo")
+            failures += 1
+            continue
+        print(f"  stored under {workout.file_date}")
+        ok, points = _tcx_attempt(client, workout, target.label, False, save_dir)
+        if points == 0:
+            ok, points = _tcx_attempt(client, workout, target.label, True, save_dir)
+        failures += not ok
     return failures

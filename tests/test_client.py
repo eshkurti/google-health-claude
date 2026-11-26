@@ -121,3 +121,40 @@ def test_empty_reply_is_not_a_shape_error():
     c, _ = client([FakeResponse(200, {}), FakeResponse(200, {"rollupDataPoints": []})])
     assert c.list_data_points("steps") == []
     assert c.daily_rollup("steps", date(2026, 11, 24), date(2026, 11, 25)) == []
+
+
+def test_tcx_export_returns_raw_bytes_and_asks_for_media():
+    xml = "<TrainingCenterDatabase/>"
+    c, session = client([FakeResponse(200, text=xml)])
+    reply = c.export_exercise_tcx("123")
+    assert reply.status == 200
+    assert reply.content == xml.encode()
+    call = session.calls[1]
+    assert call["url"].endswith("/users/me/dataTypes/exercise/dataPoints/123:exportExerciseTcx")
+    assert call["params"] == {"alt": "media"}
+    assert call["headers"]["Accept"] == "*/*"
+
+
+def test_tcx_export_partial_data_flag():
+    c, session = client([FakeResponse(200, text="<x/>")])
+    c.export_exercise_tcx("123", partial_data=True)
+    assert session.calls[1]["params"] == {"alt": "media", "partialData": "true"}
+
+
+def test_tcx_export_returns_client_errors_instead_of_raising():
+    c, _ = client([FakeResponse(404, {"error": {"message": "not found"}})])
+    reply = c.export_exercise_tcx("123")
+    assert reply.status == 404
+    assert b"not found" in reply.content
+
+
+def test_tcx_export_retries_server_errors_then_returns_the_last_one():
+    c, session = client([FakeResponse(503, {})] * 5)
+    assert c.export_exercise_tcx("123").status == 503
+    assert len(session.calls) == 1 + 5  # token + initial try + 4 retries
+
+
+def test_tcx_export_escapes_the_id():
+    c, session = client([FakeResponse(200, text="<x/>")])
+    c.export_exercise_tcx("a/b")
+    assert "/dataPoints/a%2Fb:exportExerciseTcx" in session.calls[1]["url"]
