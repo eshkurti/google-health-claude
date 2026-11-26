@@ -1,0 +1,23 @@
+# Secrets and local credentials: never commit these
+client_secret*.json
+token.json
+.env
+
+# Raw samples saved by `probe --save-samples` contain personal health data
+samples/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+build/
+dist/
+
+# Claude Code local-only files
+.claude/
+.claude/settings.local.json
+CLAUDE.local.md
+CLAUDE.md

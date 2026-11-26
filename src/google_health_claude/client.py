@@ -1,0 +1,181 @@
+"""Minimal Google Health API client: token refresh, retries, pagination."""
+
+from __future__ import annotations
+
+import time
+from datetime import date
+from typing import Any, Callable
+
+import requests
+
+from .config import API_BASE, TOKEN_URL
+from .credentials import Credentials
+
+
+class AuthError(RuntimeError):
+    """The refresh token was rejected. Run the `auth` command again."""
+
+
+class HealthApiError(RuntimeError):
+    def __init__(self, status: int, message: str, url: str = ""):
+        super().__init__(f"HTTP {status}: {message}")
+        self.status = status
+        self.message = message
+        self.url = url
+
+
+def civil_date_time(day: date) -> dict[str, Any]:
+    """CivilDateTime for midnight at the start of ``day`` (time defaults to 00:00)."""
+    return {"date": {"year": day.year, "month": day.month, "day": day.day}}
+
+
+def _short(text: str, limit: int = 300) -> str:
+    text = " ".join(text.split())
+    return text if len(text) <= limit else text[:limit] + "..."
+
+
+def _check_shape(body: dict[str, Any], items_key: str, url: str) -> None:
+    """Fail loudly if a list reply has content but not under the expected key.
+
+    The key names are from the docs and not yet confirmed live; a silent empty
+    result would hide a wrong guess. Only key names are reported, never values.
+    """
+    other = sorted(set(body) - {items_key, "nextPageToken"})
+    if other and items_key not in body:
+        raise HealthApiError(0, f"unexpected response keys {other}, expected '{items_key}'", url)
+
+
+def _error_message(resp: Any) -> str:
+    try:
+        return _short(resp.json()["error"]["message"])
+    except Exception:  # noqa: BLE001 - any parsing problem falls back to raw text
+        return _short(getattr(resp, "text", "") or "")
+
+
+class HealthClient:
+    def __init__(
+        self,
+        creds: Credentials,
+        session: Any = None,
+        sleep: Callable[[float], None] = time.sleep,
+        max_retries: int = 4,
+    ):
+        self._creds = creds
+        self._session = session or requests.Session()
+        self._sleep = sleep
+        self._max_retries = max_retries
+        self._access_token: str | None = None
+        self._expires_at = 0.0
+        # Reported by the token endpoint; logged so we learn the real lifetime.
+        self.refresh_token_expires_in: Any = None
+
+    # -- authentication -------------------------------------------------
+
+    def _refresh(self) -> None:
+        resp = self._session.request(
+            "POST",
+            TOKEN_URL,
+            data={
+                "client_id": self._creds.client_id,
+                "client_secret": self._creds.client_secret,
+                "refresh_token": self._creds.refresh_token,
+                "grant_type": "refresh_token",
+            },
+            timeout=30,
+        )
+        if resp.status_code != 200:
+            raise AuthError(
+                f"Token refresh failed (HTTP {resp.status_code}): {_error_message(resp)}. "
+                "Run `python -m google_health_claude auth` again and update the "
+                "GOOGLE_REFRESH_TOKEN secret."
+            )
+        body = resp.json()
+        self._access_token = body["access_token"]
+        self._expires_at = time.time() + float(body.get("expires_in", 3600)) - 60
+        self.refresh_token_expires_in = body.get("refresh_token_expires_in")
+
+    def _token(self) -> str:
+        if not self._access_token or time.time() >= self._expires_at:
+            self._refresh()
+        assert self._access_token is not None
+        return self._access_token
+
+    # -- HTTP -----------------------------------------------------------
+
+    def _request(self, method: str, url: str, **kwargs: Any) -> dict[str, Any]:
+        refreshed = False
+        for attempt in range(self._max_retries + 1):
+            can_retry = attempt < self._max_retries
+            try:
+                headers = {"Authorization": f"Bearer {self._token()}", "Accept": "application/json"}
+                resp = self._session.request(method, url, headers=headers, timeout=60, **kwargs)
+            except requests.RequestException as err:
+                # Timeouts and dropped connections (also during token refresh).
+                if can_retry:
+                    self._sleep(2**attempt)
+                    continue
+                raise HealthApiError(0, f"network error ({type(err).__name__})", url) from err
+            if resp.status_code == 401 and not refreshed:
+                self._access_token = None
+                refreshed = True
+                continue
+            if resp.status_code in (429, 500, 502, 503, 504) and can_retry:
+                self._sleep(2**attempt)
+                continue
+            if resp.status_code >= 400:
+                raise HealthApiError(resp.status_code, _error_message(resp), url)
+            if not resp.content:
+                return {}
+            try:
+                body = resp.json()
+            except ValueError as err:
+                raise HealthApiError(resp.status_code, "response is not valid JSON", url) from err
+            if not isinstance(body, dict):
+                raise HealthApiError(resp.status_code, "response is not a JSON object", url)
+            return body
+        raise HealthApiError(0, "retries exhausted", url)
+
+    # -- API methods ----------------------------------------------------
+
+    def identity(self) -> dict[str, Any]:
+        return self._request("GET", f"{API_BASE}/users/me/identity")
+
+    def list_data_points(
+        self, data_type: str, flt: str | None = None, page_size: int | None = None
+    ) -> list[dict[str, Any]]:
+        """All data points matching ``flt``, following pagination."""
+        url = f"{API_BASE}/users/me/dataTypes/{data_type}/dataPoints"
+        params: dict[str, Any] = {}
+        if flt:
+            params["filter"] = flt
+        if page_size:
+            params["pageSize"] = page_size
+        points: list[dict[str, Any]] = []
+        while True:
+            body = self._request("GET", url, params=params)
+            _check_shape(body, "dataPoints", url)
+            points.extend(body.get("dataPoints", []))
+            token = body.get("nextPageToken")
+            if not token:
+                return points
+            params = {**params, "pageToken": token}
+
+    def daily_rollup(self, data_type: str, start: date, end_exclusive: date) -> list[dict[str, Any]]:
+        """One aggregated point per civil day in [start, end_exclusive)."""
+        url = f"{API_BASE}/users/me/dataTypes/{data_type}/dataPoints:dailyRollUp"
+        body: dict[str, Any] = {
+            "range": {
+                "start": civil_date_time(start),
+                "end": civil_date_time(end_exclusive),
+            },
+            "windowSizeDays": 1,
+        }
+        points: list[dict[str, Any]] = []
+        while True:
+            reply = self._request("POST", url, json=body)
+            _check_shape(reply, "rollupDataPoints", url)
+            points.extend(reply.get("rollupDataPoints", []))
+            token = reply.get("nextPageToken")
+            if not token:
+                return points
+            body = {**body, "pageToken": token}
