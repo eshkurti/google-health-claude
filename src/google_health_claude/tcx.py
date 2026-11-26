@@ -70,6 +70,7 @@ class Workout:
     exercise_id: str
     file_date: str
     start: str
+    end: str = ""
 
 
 def exercise_id(name: str) -> str:
@@ -77,7 +78,7 @@ def exercise_id(name: str) -> str:
     return name.rstrip("/").rsplit("/", 1)[-1]
 
 
-def _parse_time(text: Any) -> datetime | None:
+def parse_time(text: Any) -> datetime | None:
     if not isinstance(text, str) or not text:
         return None
     text = text.strip()
@@ -122,7 +123,7 @@ def pick_workouts(stored: list[tuple[str, dict[str, Any]]]) -> dict[str, Workout
 
     def sort_key(entry: tuple[str, dict[str, Any]]) -> tuple[str, float]:
         file_date, w = entry
-        start = _parse_time(((_exercise(w).get("interval") or {}).get("startTime")))
+        start = parse_time(((_exercise(w).get("interval") or {}).get("startTime")))
         return (file_date, start.timestamp() if start else float("-inf"))
 
     picked: dict[str, Workout | None] = {}
@@ -138,8 +139,13 @@ def pick_workouts(stored: list[tuple[str, dict[str, Any]]]) -> dict[str, Workout
             picked[target.label] = None
             continue
         file_date, w = max(candidates, key=sort_key)
-        start = (_exercise(w).get("interval") or {}).get("startTime") or ""
-        picked[target.label] = Workout(exercise_id(w["name"]), file_date, str(start))
+        interval = _exercise(w).get("interval") or {}
+        picked[target.label] = Workout(
+            exercise_id(w["name"]),
+            file_date,
+            str(interval.get("startTime") or ""),
+            str(interval.get("endTime") or ""),
+        )
     return picked
 
 
@@ -194,7 +200,7 @@ def summarize_tcx(content: bytes) -> TcxSummary:
         summary.with_position += "Position" in children
         summary.with_altitude += "AltitudeMeters" in children
         time_el = children.get("Time")
-        current = _parse_time(time_el.text) if time_el is not None else None
+        current = parse_time(time_el.text) if time_el is not None else None
         if current and previous:
             summary.intervals_s.append((current - previous).total_seconds())
         if current:

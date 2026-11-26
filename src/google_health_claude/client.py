@@ -78,6 +78,8 @@ class HealthClient:
         self._expires_at = 0.0
         # Reported by the token endpoint; logged so we learn the real lifetime.
         self.refresh_token_expires_in: Any = None
+        # HTTP status of the last API reply (for probes that report it).
+        self.last_status: int | None = None
 
     # -- authentication -------------------------------------------------
 
@@ -137,6 +139,7 @@ class HealthClient:
             if resp.status_code in (429, 500, 502, 503, 504) and can_retry:
                 self._sleep(2**attempt)
                 continue
+            self.last_status = resp.status_code
             return resp
         raise HealthApiError(0, "retries exhausted", url)
 
@@ -159,25 +162,38 @@ class HealthClient:
     def identity(self) -> dict[str, Any]:
         return self._request("GET", f"{API_BASE}/users/me/identity")
 
-    def list_data_points(
-        self, data_type: str, flt: str | None = None, page_size: int | None = None
-    ) -> list[dict[str, Any]]:
-        """All data points matching ``flt``, following pagination."""
+    def list_page(
+        self,
+        data_type: str,
+        flt: str | None = None,
+        page_size: int | None = None,
+        page_token: str | None = None,
+    ) -> dict[str, Any]:
+        """One page of a list call: the reply with ``dataPoints`` and maybe ``nextPageToken``."""
         url = f"{API_BASE}/users/me/dataTypes/{data_type}/dataPoints"
         params: dict[str, Any] = {}
         if flt:
             params["filter"] = flt
         if page_size:
             params["pageSize"] = page_size
+        if page_token:
+            params["pageToken"] = page_token
+        body = self._request("GET", url, params=params)
+        _check_shape(body, "dataPoints", url)
+        return body
+
+    def list_data_points(
+        self, data_type: str, flt: str | None = None, page_size: int | None = None
+    ) -> list[dict[str, Any]]:
+        """All data points matching ``flt``, following pagination."""
         points: list[dict[str, Any]] = []
+        token: str | None = None
         while True:
-            body = self._request("GET", url, params=params)
-            _check_shape(body, "dataPoints", url)
+            body = self.list_page(data_type, flt, page_size, token)
             points.extend(body.get("dataPoints", []))
             token = body.get("nextPageToken")
             if not token:
                 return points
-            params = {**params, "pageToken": token}
 
     def export_exercise_tcx(self, exercise_id: str, partial_data: bool = False) -> RawReply:
         """Raw TCX export of one exercise session (unverified against the live API).

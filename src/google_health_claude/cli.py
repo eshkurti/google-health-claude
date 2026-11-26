@@ -1,4 +1,4 @@
-"""Command line: auth | probe | probe-tcx | fetch | backfill."""
+"""Command line: auth | probe | probe-tcx | probe-more | fetch | backfill."""
 
 from __future__ import annotations
 
@@ -54,6 +54,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="where raw TCX replies are saved (contains health data!) (default: samples/tcx)",
     )
 
+    p_more = sub.add_parser(
+        "probe-more",
+        help="try heart-rate samples, zones, body metrics and every other readable type (prints only)",
+    )
+    common(p_more)
+    p_more.add_argument(
+        "--data-dir", type=Path, required=True,
+        help="data repo root or its data/ folder; the latest GPS run is taken from workouts/*.json",
+    )
+
     p_fetch = sub.add_parser("fetch", help="fetch the last N days (default 3) into --data-dir")
     common(p_fetch)
     p_fetch.add_argument("--data-dir", type=Path, required=True)
@@ -95,6 +105,11 @@ def main(argv: list[str] | None = None) -> int:
             from .probe import probe_tcx
 
             return 1 if probe_tcx(client, args.data_dir, args.save_samples) else 0
+
+        if args.command == "probe-more":
+            from .probe_more import probe_more
+
+            return 1 if probe_more(client, args.data_dir, today()) else 0
 
         if args.command == "fetch":
             end = args.end or today()

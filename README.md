@@ -63,6 +63,10 @@ python -m google_health_claude probe --client-secret path\to\client_secret.json
 # describe the files (structure only; raw replies go to the git-ignored samples\tcx)
 python -m google_health_claude probe-tcx --client-secret path\to\client_secret.json --data-dir path\to\data
 
+# optional: try heart-rate samples of the latest run, heart-rate zones, body metrics
+# and every other readable data type (terminal output only, no values)
+python -m google_health_claude probe-more --client-secret path\to\client_secret.json --data-dir path\to\data
+
 # 3. fetch the last 3 days, or a longer history
 python -m google_health_claude fetch --client-secret path\to\client_secret.json --data-dir path\to\data
 python -m google_health_claude backfill --client-secret path\to\client_secret.json --data-dir path\to\data --since 2026-09-01
