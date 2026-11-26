@@ -7,4 +7,4 @@ fitbit-claude is a personal project used only by its owner, Emil Shkurti.
 - No data is sold, shared with third parties, or collected from anyone else.
 - Access can be revoked at any time at https://myaccount.google.com/permissions
 
-Contact: YOUR EMAIL HERE
+Contact: emilshkurti@gmail.com
