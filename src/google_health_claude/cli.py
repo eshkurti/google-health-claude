@@ -126,6 +126,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"refresh_token_expires_in = {client.refresh_token_expires_in}", file=sys.stderr)
     for data_type, message in sorted(report.errors.items()):
         _warn(f"{data_type}: {message}")
+    if report.tcx.failed:
+        _warn(f"TCX: {report.tcx.failed} download(s) failed; see tcx.failures in _meta.json")
     if report.requests_ok == 0:
         print("error: every request failed, nothing was fetched.", file=sys.stderr)
         return 1

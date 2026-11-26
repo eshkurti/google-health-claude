@@ -35,7 +35,11 @@ class ListSpec:
 
     def filter_candidates(self, day: date) -> list[str]:
         """Filter expressions selecting data points that belong to ``day``."""
-        start, end = day.isoformat(), (day + timedelta(days=1)).isoformat()
+        return self.range_filter_candidates(day, day + timedelta(days=1))
+
+    def range_filter_candidates(self, start_day: date, end_exclusive: date) -> list[str]:
+        """Filter expressions for the civil days [start_day, end_exclusive)."""
+        start, end = start_day.isoformat(), end_exclusive.isoformat()
         candidates = []
         for convert in (_snake, _camel):
             field = ".".join([convert(self.data_type), *(convert(p) for p in self.path)])
@@ -56,10 +60,19 @@ LIST_SPECS: tuple[ListSpec, ...] = (
     ListSpec("daily-respiratory-rate", "daily", ("date",)),
     ListSpec("daily-sleep-temperature-derivations", "daily", ("date",)),
     ListSpec("daily-vo2-max", "daily", ("date",)),
+    # Zone boundaries per day (docs; unverified live).
+    ListSpec("daily-heart-rate-zones", "daily", ("date",)),
+    # Sample type: one or more estimates per run, stored under the sample date.
+    ListSpec("run-vo2-max", "daily", ("sample_time", "civil_time")),
     # A night belongs to the day you woke up.
     ListSpec("sleep", "sleep", ("interval", "civil_end_time")),
     ListSpec("exercise", "workouts", ("interval", "civil_start_time")),
 )
+
+# Weigh-ins are sparse, so every run lists this many days in one paginated call
+# (more if the fetch window is longer) and stores each sample under its date.
+WEIGHT_SPEC = ListSpec("weight", "daily", ("sample_time", "civil_time"))
+WEIGHT_DAYS = 180
 
 ROLLUP_SPECS: tuple[RollupSpec, ...] = (
     RollupSpec("steps"),

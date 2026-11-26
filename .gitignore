@@ -6,6 +6,12 @@ token.json
 # Raw samples saved by `probe --save-samples` contain personal health data
 samples/
 
+# Local fetch output (if `fetch --data-dir` points inside this repo) and TCX files
+/data/
+*.tcx
+*.tcx.gz
+_meta.json
+
 # Python
 __pycache__/
 *.py[cod]

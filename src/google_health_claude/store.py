@@ -6,7 +6,7 @@ import json
 import os
 from datetime import date
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 
 def dumps(payload: Any) -> str:
@@ -40,6 +40,18 @@ def write_if_changed(path: Path, payload: Any) -> bool:
     return True
 
 
+def write_bytes_if_changed(path: Path, content: bytes) -> bool:
+    """Byte version of ``write_if_changed`` (same atomic swap)."""
+    path = Path(path)
+    if path.exists() and path.read_bytes() == content:
+        return False
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_bytes(content)
+    os.replace(tmp, path)
+    return True
+
+
 def _item_key(item: Any) -> str:
     # Google APIs usually give each resource a unique "name" (not yet confirmed
     # for Google Health data points). Without one, the whole item is its identity.
@@ -47,20 +59,26 @@ def _item_key(item: Any) -> str:
     return name if isinstance(name, str) and name else dumps(item)
 
 
-def merge_items(existing: list, new: list) -> list:
+def merge_items(existing: list, new: list, key: Callable[[Any], str | None] | None = None) -> list:
     """Merge ``new`` into ``existing`` without dropping anything already stored.
 
     Items with the same identity are replaced in place by their new version;
     unseen items are appended in API order. Merging the same data again returns
-    an identical list, so the file stays byte-stable.
+    an identical list, so the file stays byte-stable. ``key`` overrides the
+    identity (e.g. a sample timestamp); when it returns None the default is used.
     """
-    new_by_key = {_item_key(item): item for item in new}
+
+    def identity(item: Any) -> str:
+        custom = key(item) if key else None
+        return custom if custom else _item_key(item)
+
+    new_by_key = {identity(item): item for item in new}
     merged: list = []
     seen: set[str] = set()
     for item in [*existing, *new]:
-        key = _item_key(item)
-        if key in seen:
+        key_ = identity(item)
+        if key_ in seen:
             continue
-        seen.add(key)
-        merged.append(new_by_key.get(key, item))
+        seen.add(key_)
+        merged.append(new_by_key.get(key_, item))
     return merged

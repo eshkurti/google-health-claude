@@ -24,16 +24,23 @@ The private repo's workflow checks out this repo, runs `fetch` on GitHub's serve
 
 ## What gets stored
 
-One JSON file per day and category, holding the raw API objects:
+One JSON file per day and category, holding the raw API objects, plus one TCX file per recorded workout:
 
 ```
-daily/YYYY-MM-DD.json     steps, distance, heart rate, resting HR, HRV, SpO2, ...
-sleep/YYYY-MM-DD.json     sleep sessions, keyed by the day you woke up
-workouts/YYYY-MM-DD.json  exercise sessions
-_meta.json                last fetch time and range, any data types the API refused, days to retry
+daily/YYYY-MM-DD.json        steps, distance, heart rate, resting HR, HRV, SpO2, heart-rate
+                             zones, run VO2 max, weight (by weigh-in date), ...
+sleep/YYYY-MM-DD.json        sleep sessions, keyed by the day you woke up
+workouts/YYYY-MM-DD.json     exercise sessions
+tcx/YYYY-MM-DD/<id>.tcx.gz   TCX export of a workout (track, heart rate), gzipped
+_meta.json                   last fetch time and range, any data types the API refused,
+                             days to retry, TCX counts (fetched/skipped/empty/failed)
 ```
 
 Re-fetching is idempotent: data files are rewritten only when their content changes, and new results are merged into what is already stored, so nothing fetched before is ever erased. `_meta.json` records the time of every run, so it changes on each fetch. The daily job re-fetches the last three days because the phone may sync late. `backfill` skips days already stored, except days where a request failed for a temporary reason (timeout, rate limit, server error); those are listed in `_meta.json` and retried.
+
+Weigh-ins are sparse, so every run lists the last 180 days of weight in one call and merges each weigh-in into its day by timestamp.
+
+After the workouts are stored, a TCX file is downloaded (with `partialData=true`) for each Fitbit workout that was started on the band, and for auto-detected workouts other than walks. Health Connect copies and passive walks are skipped. A reply without trackpoints is not stored and is tried again on the next run; a stored file is downloaded again only if the workout's end time changed. The gzip header has a fixed timestamp, so the same reply always gives the same bytes and no git diff.
 
 ## Design notes
 

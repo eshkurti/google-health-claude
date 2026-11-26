@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from google_health_claude.client import HealthApiError, RawReply
+
 
 class FakeResponse:
     def __init__(self, status_code: int = 200, payload: Any = None, text: str = ""):
@@ -40,3 +42,38 @@ class FakeSession:
         if isinstance(response, Exception):
             raise response
         return response
+
+
+class FakeClient:
+    """Stands in for HealthClient; behaviour is configured per test."""
+
+    def __init__(self):
+        self.list_calls = []
+        self.rollup_calls = []
+        self.refresh_token_expires_in = None
+        self.rollups = {}  # data_type -> list of points
+        self.lists = {}  # data_type -> list of points
+        self.reject_snake_case = False
+        self.failing = {}  # data_type -> HealthApiError
+        self.tcx = {}  # exercise id -> RawReply or HealthApiError
+        self.tcx_calls = []
+
+    def list_data_points(self, data_type, flt=None, page_size=None):
+        self.list_calls.append((data_type, flt))
+        if data_type in self.failing:
+            raise self.failing[data_type]
+        if self.reject_snake_case and "_" in flt.split(" ")[0]:
+            raise HealthApiError(400, "bad filter")
+        return self.lists.get(data_type, [])
+
+    def daily_rollup(self, data_type, start, end_exclusive):
+        self.rollup_calls.append((data_type, start, end_exclusive))
+        return self.rollups.get(data_type, [])
+
+    def export_exercise_tcx(self, exercise_id, partial_data=False):
+        self.tcx_calls.append((exercise_id, partial_data))
+        reply = self.tcx.get(exercise_id, RawReply(404, b'{"error": {"message": "not found"}}'))
+        if isinstance(reply, HealthApiError):
+            raise reply
+        return reply
+

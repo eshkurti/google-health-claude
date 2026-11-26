@@ -1,33 +1,9 @@
 import json
 from datetime import date
 
+from fakes import FakeClient
 from google_health_claude.client import HealthApiError
 from google_health_claude.fetch import chunks, civil_date, fetch_range
-
-
-class FakeClient:
-    """Stands in for HealthClient; behaviour is configured per test."""
-
-    def __init__(self):
-        self.list_calls = []
-        self.rollup_calls = []
-        self.refresh_token_expires_in = None
-        self.rollups = {}  # data_type -> list of points
-        self.lists = {}  # data_type -> list of points
-        self.reject_snake_case = False
-        self.failing = {}  # data_type -> HealthApiError
-
-    def list_data_points(self, data_type, flt=None, page_size=None):
-        self.list_calls.append((data_type, flt))
-        if data_type in self.failing:
-            raise self.failing[data_type]
-        if self.reject_snake_case and "_" in flt.split(" ")[0]:
-            raise HealthApiError(400, "bad filter")
-        return self.lists.get(data_type, [])
-
-    def daily_rollup(self, data_type, start, end_exclusive):
-        self.rollup_calls.append((data_type, start, end_exclusive))
-        return self.rollups.get(data_type, [])
 
 
 def rollup_point(day, value):
@@ -119,7 +95,8 @@ def test_skip_existing_avoids_refetching_stored_days(tmp_path):
     fetch_range(c, day, day, tmp_path, log=lambda _: None)
     c.list_calls.clear()
     fetch_range(c, day, day, tmp_path, skip_existing=True, log=lambda _: None)
-    assert c.list_calls == []
+    # Only weight is listed: it covers a fixed 180-day window on every run.
+    assert [t for t, _ in c.list_calls] == ["weight"]
 
 
 def test_rollup_windows_respect_the_14_day_limit(tmp_path):
@@ -209,7 +186,7 @@ def test_meta_records_every_run_and_keeps_error_fields_stable(tmp_path):
     fetch_range(c, day, day, tmp_path, log=lambda _: None)
     second = read(tmp_path / "_meta.json")
 
-    assert set(second) == {"last_fetch_utc", "window", "api_errors", "incomplete_days"}
+    assert set(second) == {"last_fetch_utc", "window", "api_errors", "incomplete_days", "tcx"}
     assert second["window"] == ["2026-11-25", "2026-11-25"]
     assert second["api_errors"] == first["api_errors"]
     assert second["incomplete_days"] == first["incomplete_days"] == ["2026-11-25"]
