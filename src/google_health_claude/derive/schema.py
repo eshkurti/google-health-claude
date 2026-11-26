@@ -1,0 +1,319 @@
+"""Table definitions: CSV column order, SQLite DDL and schema.md come from here.
+
+Column kinds: INTEGER, REAL and TEXT map to SQLite types; BOOL is written as
+``true``/``false`` in CSV and 0/1 in SQLite. An empty CSV cell (SQL NULL) means
+the value is missing; it never stands for 0.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class Column:
+    name: str
+    kind: str  # INTEGER | REAL | TEXT | BOOL
+    doc: str
+
+
+@dataclass(frozen=True)
+class Table:
+    name: str
+    doc: str
+    columns: tuple[Column, ...]
+    primary_key: tuple[str, ...]
+    foreign_keys: tuple[tuple[str, str, str], ...] = ()  # (column, table, column)
+    csv: bool = True  # False: SQLite only
+
+    @property
+    def names(self) -> list[str]:
+        return [c.name for c in self.columns]
+
+    def ddl(self) -> str:
+        sql_type = {"INTEGER": "INTEGER", "REAL": "REAL", "TEXT": "TEXT", "BOOL": "INTEGER"}
+        parts = [f"  {c.name} {sql_type[c.kind]}" for c in self.columns]
+        if self.primary_key:
+            parts.append(f"  PRIMARY KEY ({', '.join(self.primary_key)})")
+        for column, table, ref in self.foreign_keys:
+            parts.append(f"  FOREIGN KEY ({column}) REFERENCES {table}({ref})")
+        return f"CREATE TABLE {self.name} (\n" + ",\n".join(parts) + "\n)"
+
+
+def _cols(*specs: tuple[str, str, str]) -> tuple[Column, ...]:
+    return tuple(Column(*spec) for spec in specs)
+
+
+ZONE_DOC = "clock minutes in the workout's {} heart-rate zone (summary)"
+
+WORKOUTS = Table(
+    "workouts",
+    "One row per deduplicated FITBIT exercise session. HEALTH_CONNECT copies are left out and "
+    "counted in n_hc_copies; same-type FITBIT records whose intervals overlap are merged.",
+    _cols(
+        ("id", "TEXT", "Google exercise id (last segment of the record name) of the earliest-starting record"),
+        ("date", "TEXT", "local start date (Europe/Berlin)"),
+        ("start_local", "TEXT", "start, ISO 8601 with Berlin offset"),
+        ("end_local", "TEXT", "end, ISO 8601 with Berlin offset"),
+        ("type", "TEXT", "exerciseType, e.g. RUNNING"),
+        ("recording_method", "TEXT", "ACTIVELY_MEASURED (started on the band) or PASSIVELY_MEASURED (auto-detected)"),
+        ("is_training", "BOOL", "true only for ACTIVELY_MEASURED"),
+        ("has_gps", "BOOL", "its TCX has trackpoints with a position"),
+        ("duration_min", "REAL", "active duration"),
+        ("elapsed_min", "REAL", "end minus start, pauses included"),
+        ("distance_km", "REAL", "summary distance (official; never the TCX total)"),
+        ("pace_min_km", "REAL", "summary average pace"),
+        ("avg_hr_bpm", "REAL", "summary average heart rate"),
+        ("peak_hr_bpm", "REAL", "highest heart rate in the TCX"),
+        ("kcal", "REAL", "summary calories"),
+        ("steps", "INTEGER", "summary steps"),
+        ("cadence_spm", "REAL", "steps per minute of active duration"),
+        ("stride_m", "REAL", "summary stride length, else distance / steps"),
+        ("elevation_gain_m", "REAL", "summary elevation gain (TCX altitude is too noisy)"),
+        ("min_light", "REAL", ZONE_DOC.format("light")),
+        ("min_moderate", "REAL", ZONE_DOC.format("moderate (fat burn)")),
+        ("min_vigorous", "REAL", ZONE_DOC.format("vigorous (cardio)")),
+        ("min_peak", "REAL", ZONE_DOC.format("peak")),
+        ("hard_share", "REAL", "(vigorous + peak) / all four zones, 0..1"),
+        ("azm_points", "REAL", "Active Zone Minutes points (vigorous and peak count double; not clock minutes)"),
+        ("run_vo2max", "REAL", "run VO2 max estimate for this run (identical duplicates merged); unit not stated by the API"),
+        ("merged_ids", "TEXT", "other FITBIT record ids merged into this row, ';'-separated"),
+        ("n_raw_merged", "INTEGER", "FITBIT records merged into this row (1 = no duplicate)"),
+        ("n_hc_copies", "INTEGER", "HEALTH_CONNECT records overlapping this session (excluded)"),
+        ("tcx_file", "TEXT", "TCX path relative to the data folder"),
+    ),
+    ("id",),
+)
+
+RUN_SPLITS = Table(
+    "run_splits",
+    "Per-km splits of GPS runs from the API, with heart rate from TCX points inside each split's time window.",
+    _cols(
+        ("workout_id", "TEXT", "workouts.id"),
+        ("km_no", "INTEGER", "1-based split number; the last one may be a partial km"),
+        ("start_local", "TEXT", "split start"),
+        ("end_local", "TEXT", "split end"),
+        ("distance_km", "REAL", "split distance"),
+        ("duration_s", "REAL", "split active duration"),
+        ("pace_min_km", "REAL", "split pace"),
+        ("avg_hr_bpm", "REAL", "time-weighted average of TCX heart rate in the split"),
+        ("max_hr_bpm", "REAL", "highest TCX heart rate in the split"),
+    ),
+    ("workout_id", "km_no"),
+    (("workout_id", "workouts", "id"),),
+)
+
+RUN_FACTS = Table(
+    "run_facts",
+    "One row per GPS run. Full km = split of at least 0.95 km.",
+    _cols(
+        ("workout_id", "TEXT", "workouts.id"),
+        ("date", "TEXT", "local date"),
+        ("distance_km", "REAL", "summary distance"),
+        ("first_km_pace_min_km", "REAL", "pace of split 1 if it is a full km"),
+        ("fastest_km_pace_min_km", "REAL", "fastest full km"),
+        ("slowest_km_pace_min_km", "REAL", "slowest full km"),
+        ("pace_fade_s_per_km", "REAL", "second-half pace minus first-half pace, by distance, from split active times (positive = slowed down)"),
+        ("slow_km_count", "INTEGER", "full km slower than 120% of the median full km"),
+        ("hr_second_half_minus_first_half_bpm", "REAL", "time-weighted TCX heart rate, halves split at half the TCX distance"),
+        ("peak_hr_bpm", "REAL", "highest TCX heart rate"),
+        ("gps_gap_total_s", "REAL", "sum of steps longer than 5 s between positioned TCX points"),
+        ("walk_s", "REAL", "seconds moving below 6.5 km/h (10 s centred speed, never across a GPS gap)"),
+        ("avg_hr_delta_vs_previous_run_bpm", "REAL", "avg_hr_bpm minus that of the previous GPS run"),
+        ("avg_hr_delta_vs_4wk_avg_bpm", "REAL", "avg_hr_bpm minus the mean of GPS runs in the 28 days before"),
+    ),
+    ("workout_id",),
+    (("workout_id", "workouts", "id"),),
+)
+
+PERSONAL_BESTS = Table(
+    "personal_bests",
+    "Best full km split, and the fastest-paced GPS run at least as long as each target distance.",
+    _cols(
+        ("record", "TEXT", "best_1km_split or best_run_<target>"),
+        ("target_km", "REAL", "target distance"),
+        ("workout_id", "TEXT", "workouts.id"),
+        ("date", "TEXT", "local date"),
+        ("distance_km", "REAL", "split or run distance"),
+        ("duration_s", "REAL", "split or run active duration"),
+        ("pace_min_km", "REAL", "pace"),
+    ),
+    ("record",),
+    (("workout_id", "workouts", "id"),),
+)
+
+DAILY = Table(
+    "daily",
+    "One row per day that has any raw file (daily, sleep or workouts). The API leaves zero-valued "
+    "zones and activity levels out of a rollup, so active_*_min and zone_*_min are 0 when the day's "
+    "rollup exists without them, and empty only when the rollup itself is missing.",
+    _cols(
+        ("date", "TEXT", "civil date (Europe/Berlin)"),
+        ("steps", "INTEGER", "steps"),
+        ("distance_km", "REAL", "distance"),
+        ("active_kcal", "REAL", "active energy burned"),
+        ("total_kcal", "REAL", "total calories"),
+        ("hr_avg_bpm", "REAL", "average heart rate"),
+        ("hr_min_bpm", "REAL", "lowest heart rate"),
+        ("hr_max_bpm", "REAL", "highest heart rate"),
+        ("resting_hr_bpm", "REAL", "resting heart rate"),
+        ("hrv_ms", "REAL", "average heart rate variability"),
+        ("hrv_deep_rmssd_ms", "REAL", "RMSSD in deep sleep"),
+        ("hrv_entropy", "REAL", "HRV entropy (unit not stated)"),
+        ("hrv_nonrem_hr_bpm", "REAL", "non-REM heart rate"),
+        ("spo2_avg_pct", "REAL", "SpO2 average"),
+        ("spo2_lower_pct", "REAL", "SpO2 lower bound"),
+        ("spo2_upper_pct", "REAL", "SpO2 upper bound"),
+        ("spo2_std_pct", "REAL", "SpO2 standard deviation"),
+        ("resp_rate_brpm", "REAL", "breaths per minute"),
+        ("sleep_temp_vs_baseline_c", "REAL", "nightly minus baseline skin temperature"),
+        ("vo2max", "REAL", "daily VO2 max (unit not stated by the API)"),
+        ("vo2max_level", "TEXT", "cardio fitness level, e.g. AVERAGE"),
+        ("sedentary_min", "REAL", "sedentary time"),
+        ("active_light_min", "REAL", "movement-based active minutes, LIGHT"),
+        ("active_moderate_min", "REAL", "movement-based active minutes, MODERATE"),
+        ("active_vigorous_min", "REAL", "movement-based active minutes, VIGOROUS"),
+        ("zone_light_min", "REAL", "clock minutes in heart-rate zone LIGHT (includes sleep)"),
+        ("zone_moderate_min", "REAL", "clock minutes in MODERATE (fat burn)"),
+        ("zone_vigorous_min", "REAL", "clock minutes in VIGOROUS (cardio)"),
+        ("zone_peak_min", "REAL", "clock minutes in PEAK"),
+        ("zone_light_low_bpm", "REAL", "that day's LIGHT zone lower bound"),
+        ("zone_light_high_bpm", "REAL", "that day's LIGHT zone upper bound"),
+        ("zone_moderate_low_bpm", "REAL", "MODERATE lower bound"),
+        ("zone_moderate_high_bpm", "REAL", "MODERATE upper bound"),
+        ("zone_vigorous_low_bpm", "REAL", "VIGOROUS lower bound"),
+        ("zone_vigorous_high_bpm", "REAL", "VIGOROUS upper bound"),
+        ("zone_peak_low_bpm", "REAL", "PEAK lower bound"),
+        ("zone_peak_high_bpm", "REAL", "PEAK upper bound"),
+        ("azm_points", "REAL", "Active Zone Minutes points (cardio and peak count double)"),
+        ("weight_kg", "REAL", "mean of the day's weigh-ins after merging duplicates"),
+        ("is_partial", "BOOL", "one of the last 3 days before the last fetch; can still change"),
+    ),
+    ("date",),
+)
+
+SLEEP = Table(
+    "sleep",
+    "One row per sleep session, dated by the day you woke up.",
+    _cols(
+        ("id", "TEXT", "sleep record id (last segment of the record name)"),
+        ("date", "TEXT", "wake-up date"),
+        ("is_main", "BOOL", "main sleep of the night (false = nap)"),
+        ("bed_local", "TEXT", "session start"),
+        ("wake_local", "TEXT", "session end"),
+        ("time_in_bed_min", "REAL", "end minus start"),
+        ("asleep_h", "REAL", "minutes asleep / 60"),
+        ("awake_min", "REAL", "minutes awake (short awakenings not included)"),
+        ("deep_min", "REAL", "deep sleep"),
+        ("rem_min", "REAL", "REM sleep"),
+        ("light_min", "REAL", "light sleep"),
+        ("latency_min", "REAL", "minutes to fall asleep"),
+        ("short_awakenings_count", "INTEGER", "number of short (1-2 min) awakenings"),
+        ("short_awakenings_min", "REAL", "total minutes of short awakenings"),
+        ("efficiency_pct", "REAL", "asleep / time in bed x 100 (computed; the API gives none)"),
+    ),
+    ("id",),
+)
+
+SLEEP_STAGES = Table(
+    "sleep_stages",
+    "Stage segments of each sleep session.",
+    _cols(
+        ("sleep_id", "TEXT", "sleep.id"),
+        ("night", "TEXT", "wake-up date"),
+        ("stage", "TEXT", "AWAKE, LIGHT, DEEP or REM"),
+        ("start_local", "TEXT", "segment start"),
+        ("end_local", "TEXT", "segment end"),
+        ("minutes", "REAL", "segment length"),
+    ),
+    ("sleep_id", "start_local"),
+    (("sleep_id", "sleep", "id"),),
+)
+
+WEEKLY = Table(
+    "weekly",
+    "Monday-to-Sunday weeks. Runs = ACTIVELY_MEASURED RUNNING sessions.",
+    _cols(
+        ("week_start", "TEXT", "Monday"),
+        ("week_end", "TEXT", "Sunday"),
+        ("runs", "INTEGER", "training runs"),
+        ("run_km", "REAL", "total run distance"),
+        ("long_run_km", "REAL", "longest run"),
+        ("run_duration_min", "REAL", "total run active duration"),
+        ("run_avg_hr_bpm", "REAL", "duration-weighted mean of run average heart rates"),
+        ("run_hard_share", "REAL", "(vigorous + peak) / all zone minutes over the week's runs"),
+        ("azm_points", "REAL", "sum of daily Active Zone Minutes points"),
+        ("sleep_h_avg", "REAL", "mean asleep_h of main sleeps"),
+        ("resting_hr_avg_bpm", "REAL", "mean resting heart rate"),
+        ("hrv_avg_ms", "REAL", "mean HRV"),
+        ("hrv_avg_ex_outliers_ms", "REAL", "mean HRV without days flagged in quality.hrv_outlier"),
+        ("weight_kg_avg", "REAL", "mean of daily weight_kg"),
+        ("days_with_data", "INTEGER", "days with a steps or heart-rate rollup"),
+        ("is_complete", "BOOL", "7 days with data, none partial, week not current"),
+    ),
+    ("week_start",),
+)
+
+QUALITY = Table(
+    "quality",
+    "Per-day data checks. Outliers: more than 3 MAD from the median of the 28 days before "
+    "(at least 7 values needed; MAD floored at 1% of the median).",
+    _cols(
+        ("date", "TEXT", "date"),
+        ("missing_metrics", "TEXT", "expected data types not stored for the day, ';'-separated"),
+        ("is_partial", "BOOL", "one of the last 3 days"),
+        ("hrv_outlier", "BOOL", "HRV outlier (empty = not enough history or no value)"),
+        ("resting_hr_outlier", "BOOL", "resting heart rate outlier"),
+        ("spo2_outlier", "BOOL", "SpO2 average outlier"),
+        ("tcx_empty", "BOOL", "a workout that should have a TCX has none with trackpoints (empty = no such workout)"),
+    ),
+    ("date",),
+)
+
+EXERCISE_POINTS = Table(
+    "exercise_points",
+    "TCX trackpoints without coordinates (SQLite only).",
+    _cols(
+        ("workout_id", "TEXT", "workouts.id"),
+        ("t_s", "REAL", "seconds from the workout start"),
+        ("time_local", "TEXT", "point time"),
+        ("hr_bpm", "REAL", "heart rate"),
+        ("dist_m", "REAL", "cumulative TCX distance"),
+        ("alt_m", "REAL", "altitude, 30 s centred mean within a GPS segment"),
+        ("speed_m_s", "REAL", "10 s centred speed within a GPS segment"),
+    ),
+    ("workout_id", "t_s"),
+    (("workout_id", "workouts", "id"),),
+    csv=False,
+)
+
+NOTES = Table(
+    "notes",
+    "Hand-written notes; derive creates the header once and never overwrites it.",
+    _cols(
+        ("date", "TEXT", "date"),
+        ("rpe_1_10", "TEXT", "perceived exertion 1-10"),
+        ("feeling", "TEXT", "free text"),
+        ("pain", "TEXT", "free text"),
+        ("shoes", "TEXT", "free text"),
+        ("other", "TEXT", "free text"),
+    ),
+    (),  # several notes per day are allowed
+)
+
+# Insert order respects the foreign keys.
+TABLES: tuple[Table, ...] = (
+    WORKOUTS, RUN_SPLITS, RUN_FACTS, PERSONAL_BESTS, EXERCISE_POINTS,
+    DAILY, SLEEP, SLEEP_STAGES, WEEKLY, QUALITY,
+)
+
+
+def schema_markdown() -> str:
+    lines = ["# Derived tables", "", "Generated by `python -m google_health_claude derive`. "
+             "Times are Europe/Berlin; an empty cell means missing, never 0.", ""]
+    for table in (*TABLES, NOTES):
+        where = "CSV and SQLite" if table.csv else "SQLite only"
+        lines += [f"## {table.name} ({where})", "", table.doc, "", "| column | type | meaning |", "|---|---|---|"]
+        lines += [f"| {c.name} | {c.kind} | {c.doc} |" for c in table.columns]
+        lines.append("")
+    return "\n".join(lines)

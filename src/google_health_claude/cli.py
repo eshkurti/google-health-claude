@@ -1,4 +1,4 @@
-"""Command line: auth | probe | probe-tcx | probe-more | fetch | backfill."""
+"""Command line: auth | probe | probe-tcx | probe-more | fetch | backfill | derive."""
 
 from __future__ import annotations
 
@@ -76,6 +76,17 @@ def build_parser() -> argparse.ArgumentParser:
     p_back.add_argument("--since", type=_date, required=True)
     p_back.add_argument("--until", type=_date, help="default: yesterday")
     p_back.add_argument("--force", action="store_true", help="re-fetch days that already exist")
+
+    p_derive = sub.add_parser(
+        "derive", help="build CSV tables (and optionally SQLite) from the fetched files; no network",
+    )
+    p_derive.add_argument("--data-dir", type=Path, required=True, help="data repo root or its data/ folder")
+    p_derive.add_argument("--out", type=Path, required=True, help="folder for the CSV files (outside the data folder)")
+    p_derive.add_argument("--sqlite", type=Path, help="also write all tables plus exercise_points to this SQLite file")
+    p_derive.add_argument(
+        "--as-of", type=_date,
+        help="date of the last fetch; it and the 2 days before are partial (default: from _meta.json)",
+    )
     return parser
 
 
@@ -91,6 +102,16 @@ def main(argv: list[str] | None = None) -> int:
         from .auth import run_auth
 
         return run_auth(args.client_secret, args.token_file)
+
+    if args.command == "derive":
+        from .derive import derive
+
+        try:
+            derive(args.data_dir, args.out, args.sqlite, args.as_of)
+        except (FileNotFoundError, ValueError) as err:
+            print(f"error: {err}", file=sys.stderr)
+            return 1
+        return 0
 
     try:
         client = HealthClient(load_credentials(args.client_secret, args.token_file))

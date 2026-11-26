@@ -42,6 +42,16 @@ Weigh-ins are sparse, so every run lists the last 180 days of weight in one call
 
 After the workouts are stored, a TCX file is downloaded (with `partialData=true`) for each Fitbit workout that was started on the band, and for auto-detected workouts other than walks. Health Connect copies and passive walks are skipped. A reply without trackpoints is not stored and is tried again on the next run; a stored file is downloaded again only if the workout's end time changed. The gzip header has a fixed timestamp, so the same reply always gives the same bytes and no git diff.
 
+## Derived tables
+
+`derive` turns the raw files into analysis-ready CSV tables, offline. It writes `workouts`, `run_splits`, `run_facts`, `personal_bests`, `daily`, `sleep`, `sleep_stages`, `weekly` and `quality`, plus a `schema.md` describing every column. With `--sqlite` it also builds all tables in one SQLite file with foreign keys enforced, plus `exercise_points` (TCX points without coordinates). An empty `notes.csv` template is created once for hand-written notes and never overwritten.
+
+- **Deduplicated workouts.** Only Fitbit records become rows. Health Connect copies are counted on the session they overlap, and same-type Fitbit records whose intervals overlap are merged into one.
+- **No coordinates.** TCX positions are only checked for presence (`has_gps`). Latitude and longitude are never read into any output.
+- **Time-based, not count-based.** Sampling is irregular (1–3 s steps in passive sessions, gaps in GPS runs), so heart rate is time-weighted and speeds and durations come from timestamps. GPS segments break at gaps, so speed, walking time and smoothed altitude never bridge one.
+- **Honest blanks.** Numbers stored as strings and `"123s"` durations become numbers, and units go into column names. Times are in Europe/Berlin. A missing value stays empty and is never written as 0. The last three days are flagged as partial.
+- **Byte-stable.** Unchanged input gives identical CSV files.
+
 ## Design notes
 
 - **Plain files in git.** Easy for Claude (or any tool) to read, with full history for free.
@@ -77,6 +87,9 @@ python -m google_health_claude probe-more --client-secret path\to\client_secret.
 # 3. fetch the last 3 days, or a longer history
 python -m google_health_claude fetch --client-secret path\to\client_secret.json --data-dir path\to\data
 python -m google_health_claude backfill --client-secret path\to\client_secret.json --data-dir path\to\data --since 2026-09-01
+
+# 4. build the derived tables (no network; keep the output out of public repos)
+python -m google_health_claude derive --data-dir path\to\data --out path\to\derived --sqlite path\to\health.sqlite
 ```
 
 In CI the credentials come from the environment variables `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `GOOGLE_REFRESH_TOKEN`.

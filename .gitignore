@@ -12,6 +12,12 @@ samples/
 *.tcx.gz
 _meta.json
 
+# Derived tables and SQLite built by `derive` (health data)
+/derived/
+*.sqlite
+*.sqlite3
+*.db
+
 # Python
 __pycache__/
 *.py[cod]
