@@ -44,12 +44,13 @@ After the workouts are stored, a TCX file is downloaded (with `partialData=true`
 
 ## Derived tables
 
-`derive` turns the raw files into analysis-ready CSV tables, offline. It writes `workouts`, `run_splits`, `run_facts`, `personal_bests`, `daily`, `sleep`, `sleep_stages`, `weekly` and `quality`, plus a `schema.md` describing every column. With `--sqlite` it also builds all tables in one SQLite file with foreign keys enforced, plus `exercise_points` (TCX points without coordinates). An empty `notes.csv` template is created once for hand-written notes and never overwritten.
+`derive` turns the raw files into analysis-ready CSV tables, offline. It writes `workouts`, `run_splits`, `run_facts`, `personal_bests`, `daily`, `weight`, `sleep`, `sleep_stages`, `weekly` and `quality`, plus a `schema.md` describing every column. With `--sqlite` it also builds all tables in one SQLite file with foreign keys enforced, plus `exercise_points` (TCX points without coordinates). An empty `notes.csv` template is created once for hand-written notes and never overwritten.
 
 - **Deduplicated workouts.** Only Fitbit records become rows. Health Connect copies are counted on the session they overlap, and same-type Fitbit records whose intervals overlap are merged into one.
 - **No coordinates.** TCX positions are only checked for presence (`has_gps`). Latitude and longitude are never read into any output.
 - **Time-based, not count-based.** Sampling is irregular (1–3 s steps in passive sessions, gaps in GPS runs), so heart rate is time-weighted and speeds and durations come from timestamps. GPS segments break at gaps, so speed, walking time and smoothed altitude never bridge one.
 - **Honest blanks.** Numbers stored as strings and `"123s"` durations become numbers, and units go into column names. Times are in Europe/Berlin. A missing value stays empty and is never written as 0. The last three days are flagged as partial.
+- **Weigh-ins in their own table.** `weight` lists every weigh-in, including the 180-day lookback, with same-day duplicates merged. Days and weeks that only have a weigh-in get no rows in `daily`, `quality` or `weekly`.
 - **Byte-stable.** Unchanged input gives identical CSV files.
 
 ## Design notes

@@ -1,4 +1,9 @@
-"""Day-level tables: daily, sleep, sleep_stages, quality and weekly."""
+"""Day-level tables: daily, weight, sleep, sleep_stages, quality and weekly.
+
+Weigh-ins are fetched with a 180-day lookback, so daily/ holds weight-only files
+for days outside the fetched range. Those days get rows in weight.csv only: the
+day-based tables cover fetched days, i.e. days with any data besides weight.
+"""
 
 from __future__ import annotations
 
@@ -10,7 +15,7 @@ from typing import Any
 
 from ..tcx import exercise_id
 from .values import (
-    dig, local_iso, mean, minutes_between, monday, num, scaled, timestamp, weighted_mean, ymd,
+    dig, local_date, local_iso, mean, minutes_between, monday, num, scaled, timestamp, weighted_mean,
 )
 from .workouts import WorkoutTables
 
@@ -65,23 +70,28 @@ def _breakdown(metrics: dict, data_type: str, path: tuple[str, ...], key: str, v
     return {name: found.get(name, 0.0) for name in names}
 
 
-def weight_kg(points: list) -> float | None:
-    """Mean of the day's weigh-ins; the same weight within 10 min counts once."""
+def weigh_ins(daily_files: dict[date, dict]) -> list[dict]:
+    """Every weigh-in; the same weight within 10 min on the same day counts once."""
     samples = []
-    for point in points or []:
-        moment = timestamp(dig(point, "weight", "sampleTime", "physicalTime"))
-        grams = num(dig(point, "weight", "weightGrams"))
-        if moment is not None and grams is not None:
-            samples.append((moment, grams))
-    kept: list[tuple[datetime, float]] = []
-    for moment, grams in sorted(samples):
-        if any(g == grams and moment - m <= WEIGHT_DUPLICATE_WINDOW for m, g in kept):
-            continue
-        kept.append((moment, grams))
-    return mean(g / 1000 for _, g in kept)
+    for body in daily_files.values():
+        for point in dig(body, "metrics", "weight") or []:
+            moment = timestamp(dig(point, "weight", "sampleTime", "physicalTime"))
+            grams = num(dig(point, "weight", "weightGrams"))
+            if moment is not None and grams is not None:
+                samples.append((moment, grams, str(dig(point, "dataSource", "platform") or "")))
+    kept: list[tuple[datetime, float, set[str]]] = []
+    for moment, grams, source in sorted(samples):
+        duplicate = next((k for k in kept if k[1] == grams and local_date(k[0]) == local_date(moment)
+                          and moment - k[0] <= WEIGHT_DUPLICATE_WINDOW), None)
+        if duplicate:
+            duplicate[2].add(source)
+        else:
+            kept.append((moment, grams, {source}))
+    return [{"timestamp_local": local_iso(m), "weight_kg": g / 1000, "source": ";".join(sorted(src - {""})) or None}
+            for m, g, src in kept]
 
 
-def daily_row(day: date, metrics: dict, is_partial: bool) -> dict[str, Any]:
+def daily_row(day: date, metrics: dict, is_partial: bool, weight_kg: float | None) -> dict[str, Any]:
     hr = dig(metrics, "heart-rate", "heartRate") or {}
     hrv = _summary(metrics, "daily-heart-rate-variability", "dailyHeartRateVariability")
     spo2 = _summary(metrics, "daily-oxygen-saturation", "dailyOxygenSaturation")
@@ -133,7 +143,7 @@ def daily_row(day: date, metrics: dict, is_partial: bool) -> dict[str, Any]:
         "active_moderate_min": active.get("MODERATE"),
         "active_vigorous_min": active.get("VIGOROUS"),
         "azm_points": sum(azm_present) if azm_present else None,
-        "weight_kg": weight_kg(metrics.get("weight")),
+        "weight_kg": weight_kg,
         "is_partial": is_partial,
     }
     for zone in ZONES:
@@ -217,11 +227,21 @@ def build_days(data_dir: Path, workouts: WorkoutTables, as_of: date) -> dict[str
     daily_files = load_days(data_dir, "daily")
     nights = load_days(data_dir, "sleep")
     workout_days = {date.fromisoformat(w["date"]) for w in workouts.workouts}
-    all_days = sorted(set(daily_files) | set(nights) | workout_days)
+
+    def fetched(day: date) -> bool:
+        metrics = (daily_files.get(day) or {}).get("metrics") or {}
+        return any(v for k, v in metrics.items() if k != "weight") or day in nights or day in workout_days
+
+    all_days = sorted(d for d in set(daily_files) | set(nights) | workout_days if fetched(d))
     partial_from = as_of - timedelta(days=PARTIAL_DAYS - 1)
+    weight = weigh_ins(daily_files)
+    weight_by_day: dict[str, list[float]] = {}
+    for w in weight:
+        weight_by_day.setdefault(w["timestamp_local"][:10], []).append(w["weight_kg"])
 
     daily = [
-        daily_row(day, (daily_files.get(day) or {}).get("metrics") or {}, day >= partial_from)
+        daily_row(day, (daily_files.get(day) or {}).get("metrics") or {}, day >= partial_from,
+                  mean(weight_by_day.get(day.isoformat(), [])))
         for day in all_days
     ]
     sleep, stages = sleep_rows(nights)
@@ -253,12 +273,13 @@ def build_days(data_dir: Path, workouts: WorkoutTables, as_of: date) -> dict[str
             "tcx_empty": any(empties) if empties else None,
         })
 
-    weekly = weekly_rows(daily, sleep, quality, workouts.workouts, as_of)
-    return {"daily": daily, "sleep": sleep, "sleep_stages": stages, "quality": quality, "weekly": weekly}
+    weekly = weekly_rows(daily, sleep, quality, workouts.workouts, weight_by_day, as_of)
+    return {"daily": daily, "weight": weight, "sleep": sleep, "sleep_stages": stages,
+            "quality": quality, "weekly": weekly}
 
 
 def weekly_rows(daily: list[dict], sleep: list[dict], quality: list[dict], workouts: list[dict],
-                as_of: date) -> list[dict]:
+                weight_by_day: dict[str, list[float]], as_of: date) -> list[dict]:
     if not daily:
         return []
     by_day = {r["date"]: r for r in daily}
@@ -297,7 +318,7 @@ def weekly_rows(daily: list[dict], sleep: list[dict], quality: list[dict], worko
             "resting_hr_avg_bpm": mean(r["resting_hr_bpm"] for r in rows_in),
             "hrv_avg_ms": mean(r["hrv_ms"] for r in rows_in),
             "hrv_avg_ex_outliers_ms": mean(r["hrv_ms"] for r in rows_in if hrv_flag.get(r["date"]) is not True),
-            "weight_kg_avg": mean(r["weight_kg"] for r in rows_in),
+            "weight_kg_avg": mean(mean(weight_by_day[d]) for d in days if d in weight_by_day),
             "days_with_data": with_data,
             "is_complete": with_data == 7 and not any(r["is_partial"] for r in rows_in)
                            and date.fromisoformat(days[-1]) < as_of,

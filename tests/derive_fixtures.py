@@ -4,6 +4,7 @@ Shapes follow the field paths of the fetched files (numbers as strings where
 the API sends strings, "123s" durations, UTC timestamps). The scenario, with the
 last fetch on Monday 2026-11-23 (so 21-23 Nov are partial):
 
+* weight-only daily files on 2026-09-03 and 2026-09-07 (the weigh-in lookback);
 * daily files 2026-10-19 .. 2026-11-23 except 2026-11-04 (a missing day);
   HRV outlier on 2026-11-20; no SpO2 on 2026-11-12; zero-valued heart-rate zones left
   out on 2026-11-11; no time-in-zone rollup on 2026-11-13; two duplicate weigh-ins
@@ -36,6 +37,7 @@ AS_OF = date(2026, 11, 23)
 FIRST_DAY, LAST_DAY, MISSING_DAY = date(2026, 10, 19), date(2026, 11, 23), date(2026, 11, 4)
 HRV_OUTLIER_DAY, NO_SPO2_DAY, WEIGH_DAY = date(2026, 11, 20), date(2026, 11, 12), date(2026, 11, 10)
 ZERO_ZONE_DAY, NO_ZONE_DAY = date(2026, 11, 11), date(2026, 11, 13)
+WEIGHT_ONLY = ((date(2026, 9, 3), "2026-09-03T05:30:00Z", 80500), (date(2026, 9, 7), "2026-09-07T05:45:00Z", 80250))
 
 
 def utc(text: str) -> datetime:
@@ -169,6 +171,12 @@ def workout(ex_id, ex_type, start, seconds, platform="FITBIT", method="ACTIVELY_
             "dataSource": {"platform": platform, "recordingMethod": method}, "exercise": exercise}
 
 
+def weight_point(point_id: str, platform: str, grams: int, stamp: str) -> dict:
+    return {"name": f"users/0000/dataTypes/weight/dataPoints/{point_id}",
+            "dataSource": {"platform": platform, "recordingMethod": "MANUAL"},
+            "weight": {"weightGrams": grams, "sampleTime": {"physicalTime": stamp, "utcOffset": "3600s"}}}
+
+
 def daily_metrics(day: date, i: int) -> dict:
     def rollup(key, payload):
         return {"civilStartTime": {"date": ymd(day)}, "civilEndTime": {"date": ymd(day + timedelta(days=1))},
@@ -226,9 +234,7 @@ def daily_metrics(day: date, i: int) -> dict:
         del metrics["time-in-heart-rate-zone"]
     if day == WEIGH_DAY:
         metrics["weight"] = [
-            {"name": f"users/0000/dataTypes/weight/dataPoints/w{n}",
-             "dataSource": {"platform": platform, "recordingMethod": "MANUAL"},
-             "weight": {"weightGrams": grams, "sampleTime": {"physicalTime": stamp, "utcOffset": "3600s"}}}
+            weight_point(f"w{n}", platform, grams, stamp)
             for n, (platform, grams, stamp) in enumerate((
                 ("FITBIT", 78001, "2026-11-10T06:00:00Z"),
                 ("FITBIT_WEB_API", 78001, "2026-11-10T06:00:47Z"),
@@ -292,6 +298,11 @@ def build_dataset(root: Path) -> dict:
             write_json(root / "daily" / f"{day}.json", {"date": day.isoformat(), "metrics": daily_metrics(day, i)})
         day += timedelta(days=1)
         i += 1
+
+    # Weight-only files from the weigh-in lookback, weeks before the fetched days (summer time).
+    for day, stamp, grams in WEIGHT_ONLY:
+        write_json(root / "daily" / f"{day}.json",
+                   {"date": day.isoformat(), "metrics": {"weight": [weight_point(f"old{day}", "FITBIT", grams, stamp)]}})
 
     workouts: dict[date, list] = {}
 

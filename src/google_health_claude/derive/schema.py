@@ -144,7 +144,8 @@ PERSONAL_BESTS = Table(
 
 DAILY = Table(
     "daily",
-    "One row per day that has any raw file (daily, sleep or workouts). The API leaves zero-valued "
+    "One row per fetched day: a day with any data besides weight (weight-only days from the "
+    "weigh-in lookback are in weight.csv only). The API leaves zero-valued "
     "zones and activity levels out of a rollup, so active_*_min and zone_*_min are 0 when the day's "
     "rollup exists without them, and empty only when the rollup itself is missing.",
     _cols(
@@ -186,10 +187,22 @@ DAILY = Table(
         ("zone_peak_low_bpm", "REAL", "PEAK lower bound"),
         ("zone_peak_high_bpm", "REAL", "PEAK upper bound"),
         ("azm_points", "REAL", "Active Zone Minutes points (cardio and peak count double)"),
-        ("weight_kg", "REAL", "mean of the day's weigh-ins after merging duplicates"),
+        ("weight_kg", "REAL", "mean of the day's weigh-ins in weight.csv"),
         ("is_partial", "BOOL", "one of the last 3 days before the last fetch; can still change"),
     ),
     ("date",),
+)
+
+WEIGHT = Table(
+    "weight",
+    "Every weigh-in, including the 180-day lookback outside the fetched days. The same weight "
+    "within 10 min on the same day counts once.",
+    _cols(
+        ("timestamp_local", "TEXT", "weigh-in time (the earliest of merged duplicates)"),
+        ("weight_kg", "REAL", "weight"),
+        ("source", "TEXT", "dataSource.platform of the merged entries, ';'-separated"),
+    ),
+    ("timestamp_local",),
 )
 
 SLEEP = Table(
@@ -232,7 +245,8 @@ SLEEP_STAGES = Table(
 
 WEEKLY = Table(
     "weekly",
-    "Monday-to-Sunday weeks. Runs = ACTIVELY_MEASURED RUNNING sessions.",
+    "Monday-to-Sunday weeks from the first to the last fetched day (weeks with only weigh-ins "
+    "are left out). Runs = ACTIVELY_MEASURED RUNNING sessions.",
     _cols(
         ("week_start", "TEXT", "Monday"),
         ("week_end", "TEXT", "Sunday"),
@@ -247,7 +261,7 @@ WEEKLY = Table(
         ("resting_hr_avg_bpm", "REAL", "mean resting heart rate"),
         ("hrv_avg_ms", "REAL", "mean HRV"),
         ("hrv_avg_ex_outliers_ms", "REAL", "mean HRV without days flagged in quality.hrv_outlier"),
-        ("weight_kg_avg", "REAL", "mean of daily weight_kg"),
+        ("weight_kg_avg", "REAL", "mean of the daily mean weights of the week's weigh-ins"),
         ("days_with_data", "INTEGER", "days with a steps or heart-rate rollup"),
         ("is_complete", "BOOL", "7 days with data, none partial, week not current"),
     ),
@@ -304,7 +318,7 @@ NOTES = Table(
 # Insert order respects the foreign keys.
 TABLES: tuple[Table, ...] = (
     WORKOUTS, RUN_SPLITS, RUN_FACTS, PERSONAL_BESTS, EXERCISE_POINTS,
-    DAILY, SLEEP, SLEEP_STAGES, WEEKLY, QUALITY,
+    DAILY, WEIGHT, SLEEP, SLEEP_STAGES, WEEKLY, QUALITY,
 )
 
 

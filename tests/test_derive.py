@@ -190,6 +190,25 @@ def test_same_day_weigh_ins_merge_duplicates_then_average(run):
     assert daily["2026-11-11"]["weight_kg"] == ""
 
 
+def test_weigh_ins_go_to_weight_csv_with_duplicates_merged(run):
+    weight = run["table"]("weight")
+    assert [(r["timestamp_local"], r["weight_kg"], r["source"]) for r in weight] == [
+        ("2026-09-03T07:30:00+02:00", "80.5", "FITBIT"),  # summer time: UTC+2
+        ("2026-09-07T07:45:00+02:00", "80.25", "FITBIT"),
+        ("2026-11-10T07:00:00+01:00", "78.001", "FITBIT;FITBIT_WEB_API"),  # duplicate 47 s later merged
+        ("2026-11-10T19:00:00+01:00", "79.001", "FITBIT"),
+    ]
+
+
+def test_weight_only_days_stay_out_of_the_day_tables(run):
+    daily, quality, weekly = run["table"]("daily"), run["table"]("quality"), run["table"]("weekly")
+    assert daily[0]["date"] == "2026-10-19" and quality[0]["date"] == "2026-10-19"
+    assert not any(r["date"].startswith("2026-09") for r in daily + quality)
+    assert weekly[0]["week_start"] == "2026-10-19"  # no rows for the September weigh-in weeks
+    assert all(r["weight_kg"] == "" for r in daily if r["date"] != "2026-11-10")
+    assert by(weekly, "week_start")["2026-11-09"]["weight_kg_avg"] == "78.501"
+
+
 def test_last_three_days_are_partial(run):
     daily = by(run["table"]("daily"), "date")
     assert run["report"].as_of == AS_OF
