@@ -1,4 +1,4 @@
-# Privacy Policy – fitbit-claude
+# Privacy Policy – google-health-claude
 
 fitbit-claude is a personal project used only by its owner, Emil Shkurti.
 
