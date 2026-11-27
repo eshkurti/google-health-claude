@@ -5,7 +5,7 @@ anchor on a lake shore in Slovenia, with a 35 m climb on the north side. It is
 not a real route and is nowhere near any user of this project.
 
 Only ``+ - * /`` and ``sqrt`` are used on floats here: IEEE 754 rounds those
-exactly, so a seed gives the same bytes on every platform (``sin``, ``cos`` and
+exactly, so a seed gives the same numbers on every platform (``sin``, ``cos`` and
 ``log`` may differ in the last bit between C libraries, so they are avoided).
 """
 

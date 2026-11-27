@@ -31,7 +31,10 @@ Determinism: no wall-clock time and no unseeded randomness. Every day, night
 and workout draws from its own ``random.Random`` seeded with a string such as
 ``"7:run:2026-10-06"``, so earlier days do not depend on ``weeks``. JSON goes
 through ``store.write_if_changed`` and TCX through ``workout_tcx.gzip_bytes``
-(gzip mtime 0), exactly as fetch writes them.
+(gzip mtime 0), exactly as fetch writes them. A seed gives the same content on
+every platform, and the same bytes on the same Python and zlib build: gzip's
+compressed stream differs between builds (Python 3.11 and 3.12 write zlib's OS
+byte into the header, Windows builds from 3.14 use zlib-ng).
 """
 
 from __future__ import annotations

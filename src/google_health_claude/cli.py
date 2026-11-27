@@ -120,7 +120,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--seed",
         type=int,
         default=DEFAULT_SEED,
-        help=f"same seed, same bytes (default {DEFAULT_SEED})",
+        help=f"same seed, same data (default {DEFAULT_SEED})",
     )
     p_demo.add_argument(
         "--weeks",

@@ -15,7 +15,8 @@ Rules:
 * transient errors are retried with backoff by the client; any failure is
   recorded and the run continues;
 * gzip is written with a fixed header (mtime 0), so the same reply gives the
-  same bytes and no git diff;
+  same bytes and no git diff on the same Python and zlib build (the compressed
+  stream can differ between builds; the content never does);
 * logs name the date and exercise type only, never coordinates or record names.
 """
 

@@ -69,6 +69,8 @@ def start_of(record) -> datetime:
 
 
 def test_same_seed_gives_the_same_bytes_and_another_seed_does_not(tmp_path):
+    # Exact bytes, gzip included, hold within one Python and zlib build; across
+    # builds the golden test compares TCX files by their decompressed content.
     for name, seed in (("a", 3), ("b", 3), ("c", 4)):
         generate(tmp_path / name, seed, MIN_WEEKS)
     assert digest(tmp_path / "a") == digest(tmp_path / "b")

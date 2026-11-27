@@ -40,7 +40,7 @@ Re-fetching is idempotent: data files are rewritten only when their content chan
 
 Weigh-ins are sparse, so every run lists the last 180 days of weight in one call and merges each weigh-in into its day by timestamp.
 
-After the workouts are stored, a TCX file is downloaded (with `partialData=true`) for each Fitbit workout that was started on the band, and for auto-detected workouts other than walks. Health Connect copies and passive walks are skipped. A reply without trackpoints is not stored and is tried again on the next run; a stored file is downloaded again only if the workout's end time changed. The gzip header has a fixed timestamp, so the same reply always gives the same bytes and no git diff.
+After the workouts are stored, a TCX file is downloaded (with `partialData=true`) for each Fitbit workout that was started on the band, and for auto-detected workouts other than walks. Health Connect copies and passive walks are skipped. A reply without trackpoints is not stored and is tried again on the next run; a stored file is downloaded again only if the workout's end time changed. The gzip header has a fixed timestamp, so the same reply gives the same bytes and no git diff as long as the Python and zlib build stay the same (other builds compress the same content into different bytes).
 
 ## Derived tables
 
@@ -63,7 +63,7 @@ After the workouts are stored, a TCX file is downloaded (with `partialData=true`
 
 ## Try it without a Fitbit
 
-`demo` writes invented data in exactly the layout `fetch` produces: six weeks of a beginner's marathon build (3-4 runs a week with a growing long run, weekly strength, passive walks, daily heart rate, HRV, SpO2, sleep and a few weigh-ins). The GPS track is an invented lake loop with a short climb. The same seed always gives the same bytes. No account, no token, no network:
+`demo` writes invented data in exactly the layout `fetch` produces: six weeks of a beginner's marathon build (3-4 runs a week with a growing long run, weekly strength, passive walks, daily heart rate, HRV, SpO2, sleep and a few weigh-ins). The GPS track is an invented lake loop with a short climb. The same seed gives the same content on every platform, and the same bytes on the same Python and zlib build. No account, no token, no network:
 
 ```powershell
 pip install -e .
@@ -107,7 +107,7 @@ python -m google_health_claude derive --data-dir path\to\data --out path\to\deri
 
 In CI the credentials come from the environment variables `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `GOOGLE_REFRESH_TOKEN`.
 
-Run the tests with `pip install -e ".[dev]"` and `pytest`. A golden test pins the whole pipeline: `tests/golden/raw` is `demo --seed 1 --weeks 3`, and `tests/golden/expected` is what `derive` makes of it, compared byte for byte (SQLite through queries). After an intended change, regenerate with `pytest tests/test_golden.py --update-golden` and commit the golden files on their own.
+Run the tests with `pip install -e ".[dev]"` and `pytest`. A golden test pins the whole pipeline: `tests/golden/raw` is `demo --seed 1 --weeks 3`, and `tests/golden/expected` is what `derive` makes of it. Text files are compared byte for byte, TCX files by their decompressed content (the gzip bytes vary between Python builds), SQLite through queries. After an intended change, regenerate with `pytest tests/test_golden.py --update-golden` and commit the golden files on their own.
 
 `scripts/compare_real.py --raw PATH --ref TAG [--ref2 TAG_OR_FOLDER]` runs `derive` from two code versions on the same data in temporary git worktrees. It prints only file names, row counts and how many lines differ, never a value, so it is safe on real data.
 
