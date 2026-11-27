@@ -16,9 +16,11 @@ from __future__ import annotations
 
 import gzip
 import xml.etree.ElementTree as ET
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from .values import local_iso, num, timestamp
 
@@ -126,7 +128,9 @@ def gps_segments(points: list[Point]) -> tuple[list[list[int]], float]:
     return segments, gap_total
 
 
-def _windowed(points: list[Point], segment: list[int], half_window: float):
+def _windowed(
+    points: list[Point], segment: list[int], half_window: float
+) -> Iterator[tuple[int, int, int]]:
     """For each index of the segment: (first, last) indices within +-half_window seconds."""
     lo = hi = 0
     for k, idx in enumerate(segment):
@@ -186,7 +190,7 @@ def hr_half_delta(points: list[Point]) -> float | None:
     return None if first is None or second is None else second - first
 
 
-def point_rows(points: list[Point], start: datetime) -> list[dict]:
+def point_rows(points: list[Point], start: datetime) -> list[dict[str, Any]]:
     """exercise_points rows (no coordinates): speed and altitude only inside GPS segments."""
     speeds: dict[int, float | None] = {}
     altitudes: dict[int, float | None] = {}

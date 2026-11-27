@@ -37,7 +37,7 @@ def sql_value(value: Any, kind: str) -> Any:
     return str(value)
 
 
-def csv_text(table: Table, rows: list[dict]) -> str:
+def csv_text(table: Table, rows: list[dict[str, Any]]) -> str:
     buffer = io.StringIO()
     writer = csv.writer(buffer, lineterminator="\n")
     writer.writerow(table.names)
@@ -57,7 +57,7 @@ def write_text_if_changed(path: Path, text: str) -> bool:
     return True
 
 
-def write_csvs(out_dir: Path, tables: dict[str, list[dict]]) -> int:
+def write_csvs(out_dir: Path, tables: dict[str, list[dict[str, Any]]]) -> int:
     changed = 0
     for table in TABLES:
         if table.csv:
@@ -77,7 +77,7 @@ def ensure_notes(out_dir: Path) -> bool:
     return True
 
 
-def read_notes(out_dir: Path) -> list[dict]:
+def read_notes(out_dir: Path) -> list[dict[str, Any]]:
     path = Path(out_dir) / "notes.csv"
     if not path.exists():
         return []
@@ -88,7 +88,9 @@ def read_notes(out_dir: Path) -> list[dict]:
         ]
 
 
-def write_sqlite(path: Path, tables: dict[str, list[dict]], notes: list[dict]) -> None:
+def write_sqlite(
+    path: Path, tables: dict[str, list[dict[str, Any]]], notes: list[dict[str, Any]]
+) -> None:
     """Rebuild the SQLite file from scratch (it is derived data) with foreign keys enforced."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)

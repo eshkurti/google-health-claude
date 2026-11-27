@@ -77,7 +77,7 @@ EXPECTED_DAILY = (
 )
 
 
-def load_days(data_dir: Path, category: str) -> dict[date, dict]:
+def load_days(data_dir: Path, category: str) -> dict[date, dict[str, Any]]:
     days = {}
     for path in sorted((Path(data_dir) / category).glob("*.json")):
         try:
@@ -90,7 +90,7 @@ def load_days(data_dir: Path, category: str) -> dict[date, dict]:
     return days
 
 
-def _summary(metrics: dict, data_type: str, key: str) -> dict:
+def _summary(metrics: dict[str, Any], data_type: str, key: str) -> dict[str, Any]:
     """The first element's payload of a listed daily summary."""
     for item in metrics.get(data_type) or []:
         payload = item.get(key) if isinstance(item, dict) else None
@@ -100,7 +100,7 @@ def _summary(metrics: dict, data_type: str, key: str) -> dict:
 
 
 def _breakdown(
-    metrics: dict,
+    metrics: dict[str, Any],
     data_type: str,
     path: tuple[str, ...],
     key: str,
@@ -119,7 +119,7 @@ def _breakdown(
     return {name: found.get(name, 0.0) for name in names}
 
 
-def weigh_ins(daily_files: dict[date, dict]) -> list[dict]:
+def weigh_ins(daily_files: dict[date, dict[str, Any]]) -> list[dict[str, Any]]:
     """Every weigh-in; the same weight within 10 min on the same day counts once."""
     samples = []
     for body in daily_files.values():
@@ -155,7 +155,7 @@ def weigh_ins(daily_files: dict[date, dict]) -> list[dict]:
 
 
 def daily_row(
-    day: date, metrics: dict, is_partial: bool, weight_kg: float | None
+    day: date, metrics: dict[str, Any], is_partial: bool, weight_kg: float | None
 ) -> dict[str, Any]:
     hr = dig(metrics, "heart-rate", "heartRate") or {}
     hrv = _summary(metrics, "daily-heart-rate-variability", "dailyHeartRateVariability")
@@ -265,7 +265,9 @@ def daily_row(
     return row
 
 
-def sleep_rows(nights: dict[date, dict]) -> tuple[list[dict], list[dict]]:
+def sleep_rows(
+    nights: dict[date, dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     sessions, stages = [], []
     seen: set[str] = set()
     for night, body in sorted(nights.items()):
@@ -360,7 +362,9 @@ def outlier_flags(series: dict[date, float], rule: OutlierRule) -> dict[date, bo
     return flags
 
 
-def build_days(data_dir: Path, workouts: WorkoutTables, as_of: date) -> dict[str, list[dict]]:
+def build_days(
+    data_dir: Path, workouts: WorkoutTables, as_of: date
+) -> dict[str, list[dict[str, Any]]]:
     daily_files = load_days(data_dir, "daily")
     nights = load_days(data_dir, "sleep")
     workout_days = {date.fromisoformat(w["date"]) for w in workouts.workouts}
@@ -434,13 +438,13 @@ def build_days(data_dir: Path, workouts: WorkoutTables, as_of: date) -> dict[str
 
 
 def weekly_rows(
-    daily: list[dict],
-    sleep: list[dict],
-    quality: list[dict],
-    workouts: list[dict],
+    daily: list[dict[str, Any]],
+    sleep: list[dict[str, Any]],
+    quality: list[dict[str, Any]],
+    workouts: list[dict[str, Any]],
     weight_by_day: dict[str, list[float]],
     as_of: date,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     if not daily:
         return []
     by_day = {r["date"]: r for r in daily}

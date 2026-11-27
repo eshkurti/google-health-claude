@@ -76,12 +76,12 @@ class Session:
 @dataclass
 class WorkoutTables:
     sessions: list[Session] = field(default_factory=list)
-    workouts: list[dict] = field(default_factory=list)
-    run_splits: list[dict] = field(default_factory=list)
-    run_facts: list[dict] = field(default_factory=list)
-    personal_bests: list[dict] = field(default_factory=list)
+    workouts: list[dict[str, Any]] = field(default_factory=list)
+    run_splits: list[dict[str, Any]] = field(default_factory=list)
+    run_facts: list[dict[str, Any]] = field(default_factory=list)
+    personal_bests: list[dict[str, Any]] = field(default_factory=list)
 
-    def exercise_points(self) -> list[dict]:
+    def exercise_points(self) -> list[dict[str, Any]]:
         rows = []
         for s in self.sessions:
             for row in point_rows(s.points or [], s.primary.start):
@@ -266,7 +266,7 @@ def workout_row(s: Session, data_dir: Path) -> dict[str, Any]:
 
 
 def split_rows(s: Session) -> list[dict[str, Any]]:
-    raw_splits = next(
+    raw_splits: Any = next(
         (m.exercise.get("splits") for m in [s.primary, *s.members] if m.exercise.get("splits")), []
     )
     parsed = []
@@ -300,11 +300,12 @@ def split_rows(s: Session) -> list[dict[str, Any]]:
     return rows
 
 
-def pace_fade(splits: list[dict]) -> float | None:
+def pace_fade(splits: list[dict[str, Any]]) -> float | None:
     """Second-half minus first-half pace (s/km), halves by distance, from split active times."""
-    parts = [(r["distance_km"], r["duration_s"]) for r in splits]
-    if not parts or any(d is None or t is None or d <= 0 for d, t in parts):
+    raw = [(r["distance_km"], r["duration_s"]) for r in splits]
+    if not raw or any(d is None or t is None or d <= 0 for d, t in raw):
         return None
+    parts: list[tuple[float, float]] = raw  # checked above: no None, positive distances
     total_km = sum(d for d, _ in parts)
     total_s = sum(t for _, t in parts)
     half = total_km / 2
@@ -319,7 +320,10 @@ def pace_fade(splits: list[dict]) -> float | None:
 
 
 def facts_row(
-    s: Session, workout: dict, splits: list[dict], previous: list[dict]
+    s: Session,
+    workout: dict[str, Any],
+    splits: list[dict[str, Any]],
+    previous: list[dict[str, Any]],
 ) -> dict[str, Any]:
     full = [
         r
@@ -359,11 +363,13 @@ def facts_row(
     }
 
 
-def timestamp_of(workout: dict) -> datetime:
+def timestamp_of(workout: dict[str, Any]) -> datetime:
     return datetime.fromisoformat(workout["start_local"])
 
 
-def personal_bests(gps_runs: list[dict], splits: list[dict]) -> list[dict]:
+def personal_bests(
+    gps_runs: list[dict[str, Any]], splits: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
     by_id = {w["id"]: w for w in gps_runs}
     rows = []
     full = [
@@ -419,7 +425,7 @@ def build_workouts(data_dir: Path, warn: Callable[[str], None]) -> WorkoutTables
     attach_tcx(tables.sessions, data_dir, warn)
     attach_run_vo2(tables.sessions, load_run_vo2(data_dir))
 
-    gps_runs: list[dict] = []
+    gps_runs: list[dict[str, Any]] = []
     for s in tables.sessions:
         row = workout_row(s, data_dir)
         tables.workouts.append(row)
