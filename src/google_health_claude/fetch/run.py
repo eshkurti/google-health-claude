@@ -25,9 +25,10 @@ from zoneinfo import ZoneInfo
 
 from ..api.client import HealthApiError
 from ..config import TIMEZONE
-from ..datatypes import LIST_SPECS, ROLLUP_SPECS, WEIGHT_DAYS, WEIGHT_SPEC, ListSpec, _camel
 from ..records import civil_date, parse_time
 from ..workout_tcx import TcxReport, export_tcx_for_days
+from .datatypes import LIST_SPECS, ROLLUP_SPECS, WEIGHT_DAYS, WEIGHT_SPEC, camel
+from .lists import list_for_day, list_range
 from .store import day_path, load_json, merge_items, write_if_changed
 
 Log = Callable[[str], None]
@@ -66,7 +67,7 @@ def chunks(start: date, end: date, size: int) -> list[tuple[date, date]]:
 
 
 def _sample_time(point: Any, data_type: str) -> dict:
-    payload = point.get(_camel(data_type)) if isinstance(point, dict) else None
+    payload = point.get(camel(data_type)) if isinstance(point, dict) else None
     sample = payload.get("sampleTime") if isinstance(payload, dict) else None
     return sample if isinstance(sample, dict) else {}
 
@@ -95,36 +96,6 @@ def sample_key(data_type: str) -> Callable[[Any], str | None]:
 
 # Lists merged by something other than the record name.
 MERGE_KEYS: dict[str, Callable[[Any], str | None]] = {"weight": sample_key("weight")}
-
-
-def list_for_day(
-    client: Any, spec: ListSpec, day: date, variant_cache: dict[str, int]
-) -> list[dict]:
-    """List a day's points, trying the filter spellings until one is accepted."""
-    return list_range(client, spec, day, day + timedelta(days=1), variant_cache)
-
-
-def list_range(
-    client: Any, spec: ListSpec, start: date, end_exclusive: date, variant_cache: dict[str, int]
-) -> list[dict]:
-    """List the points of [start, end_exclusive), trying the filter spellings."""
-    candidates = spec.range_filter_candidates(start, end_exclusive)
-    first = variant_cache.get(spec.data_type, 0)
-    order = [first] + [i for i in range(len(candidates)) if i != first]
-    last_error: HealthApiError | None = None
-    for index in order:
-        try:
-            points = client.list_data_points(spec.data_type, candidates[index])
-        except HealthApiError as err:
-            if err.status != 400:
-                raise
-            last_error = err
-            continue
-        variant_cache[spec.data_type] = index
-        return points
-    if last_error is None:  # unreachable: every ListSpec yields two filter spellings
-        raise RuntimeError(f"no filter candidates for {spec.data_type}")
-    raise last_error
 
 
 def fetch_range(  # noqa: C901 - split in refactor session

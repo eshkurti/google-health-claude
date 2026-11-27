@@ -24,7 +24,7 @@ from zoneinfo import ZoneInfo
 
 from .api.client import HealthApiError
 from .config import TIMEZONE
-from .datatypes import _camel, _snake
+from .fetch.datatypes import camel, snake
 from .records import parse_time
 from .tcx import load_workouts, pick_workouts
 
@@ -138,7 +138,7 @@ def range_filters(info: TypeInfo, start: date, end_exclusive: date) -> list[str 
     }[info.kind]
     lo, hi = start.isoformat(), end_exclusive.isoformat()
     result: list[str | None] = []
-    for convert in (_snake, _camel):
+    for convert in (snake, camel):
         field = ".".join([convert(info.data_type), *(convert(p) for p in path)])
         result.append(f'{field} >= "{lo}" AND {field} < "{hi}"')
     return result
@@ -147,7 +147,7 @@ def range_filters(info: TypeInfo, start: date, end_exclusive: date) -> list[str 
 def instant_filters(data_type: str, start: str, end: str) -> list[str | None]:
     """Sample filters on physical time between two RFC 3339 timestamps."""
     result: list[str | None] = []
-    for convert in (_snake, _camel):
+    for convert in (snake, camel):
         field = ".".join([convert(data_type), convert("sample_time"), convert("physical_time")])
         result.append(f'{field} >= "{start}" AND {field} < "{end}"')
     return result

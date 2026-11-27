@@ -1,7 +1,7 @@
 from datetime import date
 
 from google_health_claude.config import READ_SCOPES
-from google_health_claude.datatypes import LIST_SPECS, ROLLUP_SPECS
+from google_health_claude.fetch.datatypes import LIST_SPECS, ROLLUP_SPECS
 
 
 def spec(name):

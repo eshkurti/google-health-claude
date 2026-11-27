@@ -18,12 +18,12 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 
 
-def _snake(name: str) -> str:
+def snake(name: str) -> str:
     return name.replace("-", "_")
 
 
-def _camel(name: str) -> str:
-    first, *rest = _snake(name).split("_")
+def camel(name: str) -> str:
+    first, *rest = snake(name).split("_")
     return first + "".join(part.capitalize() for part in rest)
 
 
@@ -41,7 +41,7 @@ class ListSpec:
         """Filter expressions for the civil days [start_day, end_exclusive)."""
         start, end = start_day.isoformat(), end_exclusive.isoformat()
         candidates = []
-        for convert in (_snake, _camel):
+        for convert in (snake, camel):
             field = ".".join([convert(self.data_type), *(convert(p) for p in self.path)])
             candidates.append(f'{field} >= "{start}" AND {field} < "{end}"')
         return candidates
