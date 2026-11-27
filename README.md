@@ -61,6 +61,18 @@ After the workouts are stored, a TCX file is downloaded (with `partialData=true`
 - **Google's docs spell filter fields two ways** (snake_case and camelCase), so each query tries both and remembers which one the API accepts.
 - **Read-only scopes only.** Google documents nine read-only scopes, and those are all that is requested.
 
+## Try it without a Fitbit
+
+`demo` writes invented data in exactly the layout `fetch` produces: six weeks of a beginner's marathon build (3-4 runs a week with a growing long run, weekly strength, passive walks, daily heart rate, HRV, SpO2, sleep and a few weigh-ins). The GPS track is an invented lake loop with a short climb. The same seed always gives the same bytes. No account, no token, no network:
+
+```powershell
+pip install -e .
+python -m google_health_claude demo --out demo-data              # --seed N, --weeks 3-26
+python -m google_health_claude derive --data-dir demo-data --out demo-derived --sqlite demo.sqlite
+```
+
+The demo deliberately includes every awkward case `derive` handles: Health Connect copies and a run recorded twice, a GPS gap, a run after midnight that falls on another UTC date, the switch from summer time, a day without data, a sick day with resting-HR and HRV outliers, partial last days, an empty TCX export, and numbers stored as strings.
+
 ## Run it yourself
 
 You need your own Google Cloud project with the Google Health API enabled and an OAuth client of type *Desktop app*.
@@ -95,7 +107,9 @@ python -m google_health_claude derive --data-dir path\to\data --out path\to\deri
 
 In CI the credentials come from the environment variables `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `GOOGLE_REFRESH_TOKEN`.
 
-Run the tests with `pip install -e ".[dev]"` and `pytest`.
+Run the tests with `pip install -e ".[dev]"` and `pytest`. A golden test pins the whole pipeline: `tests/golden/raw` is `demo --seed 1 --weeks 3`, and `tests/golden/expected` is what `derive` makes of it, compared byte for byte (SQLite through queries). After an intended change, regenerate with `pytest tests/test_golden.py --update-golden` and commit the golden files on their own.
+
+`scripts/compare_real.py --raw PATH --ref TAG [--ref2 TAG_OR_FOLDER]` runs `derive` from two code versions on the same data in temporary git worktrees. It prints only file names, row counts and how many lines differ, never a value, so it is safe on real data.
 
 ## Privacy
 
