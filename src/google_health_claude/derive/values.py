@@ -12,7 +12,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from datetime import date, datetime, timedelta
 from statistics import median
-from typing import Any
+from typing import Any, overload
 from zoneinfo import ZoneInfo
 
 from ..config import TIMEZONE
@@ -64,15 +64,27 @@ def timestamp(text: Any) -> datetime | None:
     return moment if moment is not None and moment.tzinfo is not None else None
 
 
+@overload
+def local(moment: datetime) -> datetime: ...
+@overload
+def local(moment: None) -> None: ...
 def local(moment: datetime | None) -> datetime | None:
     return None if moment is None else moment.astimezone(TZ)
 
 
+@overload
+def local_iso(moment: datetime) -> str: ...
+@overload
+def local_iso(moment: None) -> None: ...
 def local_iso(moment: datetime | None) -> str | None:
     """ISO 8601 in Europe/Berlin with its offset, to the second."""
     return None if moment is None else local(moment).replace(microsecond=0).isoformat()
 
 
+@overload
+def local_date(moment: datetime) -> date: ...
+@overload
+def local_date(moment: None) -> None: ...
 def local_date(moment: datetime | None) -> date | None:
     return None if moment is None else local(moment).date()
 

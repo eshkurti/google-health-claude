@@ -240,7 +240,7 @@ def workout_row(s: Session, data_dir: Path) -> dict[str, Any]:
         "type": s.primary.type,
         "recording_method": s.primary.method,
         "is_training": s.primary.method == "ACTIVELY_MEASURED",
-        "has_gps": bool(s.points) and any(p.has_pos for p in s.points),
+        "has_gps": s.points is not None and any(p.has_pos for p in s.points),
         "duration_min": duration_min,
         "elapsed_min": minutes_between(s.primary.start, s.primary.end),
         "distance_km": distance_km,
@@ -349,7 +349,9 @@ def facts_row(
         "fastest_km_pace_min_km": min(paces) if paces else None,
         "slowest_km_pace_min_km": max(paces) if paces else None,
         "pace_fade_s_per_km": pace_fade(splits),
-        "slow_km_count": sum(p > SLOW_KM_FACTOR * typical for p in paces) if paces else None,
+        "slow_km_count": sum(p > SLOW_KM_FACTOR * typical for p in paces)
+        if typical is not None
+        else None,
         "hr_second_half_minus_first_half_bpm": hr_half_delta(points),
         "peak_hr_bpm": workout["peak_hr_bpm"],
         "gps_gap_total_s": gap_total,

@@ -251,9 +251,14 @@ def test_probe_more_flow(data_repo, tmp_path, monkeypatch):
     ]
     assert len(section4) == len(OTHER_TYPES) + len(GUESSED_TYPES)
     assert ("rollup", "floors", (date(2026, 1, 4), date(2026, 1, 11))) in client.calls
-    assert any(l.startswith("  steps [list]") and l.endswith("HTTP 200, 3 points") for l in lines)
-    assert any("daily-readiness [list, guess, not in docs]" in l and "HTTP 404" in l for l in lines)
-    assert any(l.startswith("  sleep") and "HTTP 500" in l for l in lines)
+    assert any(
+        line.startswith("  steps [list]") and line.endswith("HTTP 200, 3 points") for line in lines
+    )
+    assert any(
+        "daily-readiness [list, guess, not in docs]" in line and "HTTP 404" in line
+        for line in lines
+    )
+    assert any(line.startswith("  sleep") and "HTTP 500" in line for line in lines)
 
     # Never raw values or record names.
     for secret in ("141", "152", "149", "97", "123", "4200", "users/0000", "secret-id", "run1"):
@@ -265,7 +270,7 @@ def test_probe_more_without_a_run_skips_section_1(tmp_path):
     lines = []
     client = FakeClient({})
     probe_more(client, tmp_path, TODAY, out=lines.append)
-    assert any("SKIP" in l for l in lines)
+    assert any("SKIP" in line for line in lines)
     assert not any(c[1] == "heart-rate" for c in client.calls)
 
 

@@ -8,6 +8,7 @@ GOOGLE_REFRESH_TOKEN secret in the private data repo.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 from datetime import datetime, timezone
@@ -57,10 +58,8 @@ def run_auth(client_secret_path: Path, token_path: Path | None = None) -> int:
         ),
         encoding="utf-8",
     )
-    try:
+    with contextlib.suppress(OSError):
         os.chmod(token_path, 0o600)
-    except OSError:
-        pass
 
     print(f"\nSigned in. Refresh token saved to:\n  {token_path}\n")
     print("Scopes granted:")

@@ -404,7 +404,7 @@ def build_days(
     }
     sleep_days = {r["date"] for r in sleep}
     tcx_needed: dict[str, list[bool]] = {}
-    for s, w in zip(workouts.sessions, workouts.workouts):
+    for s, w in zip(workouts.sessions, workouts.workouts, strict=True):
         if s.needs_tcx:
             tcx_needed.setdefault(w["date"], []).append(not s.points)
     quality = []
@@ -472,7 +472,9 @@ def weekly_rows(
         main_sleep = [r["asleep_h"] for r in sleep if r["date"] in days and r["is_main"]]
         azm = [r["azm_points"] for r in rows_in if r["azm_points"] is not None]
 
-        def total(key: str) -> float | None:
+        def total(
+            key: str, runs: list[dict[str, Any]] = runs, has_any: bool = has_any
+        ) -> float | None:
             values = [w[key] for w in runs if w[key] is not None]
             return sum(values) if values else (0.0 if has_any and not runs else None)
 

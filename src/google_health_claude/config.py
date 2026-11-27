@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 
 API_BASE = "https://health.googleapis.com/v4"
-TOKEN_URL = "https://oauth2.googleapis.com/token"
+TOKEN_URL = "https://oauth2.googleapis.com/token"  # noqa: S105 - an endpoint URL, not a credential
 
 SCOPE_PREFIX = "https://www.googleapis.com/auth/googlehealth."
 

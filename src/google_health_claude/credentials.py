@@ -64,6 +64,6 @@ def load_credentials(
         )
         if not value
     ]
-    if missing:
+    if missing or not (client_id and client_secret and refresh_token):
         raise CredentialsError("Missing: " + "; ".join(missing))
     return Credentials(client_id, client_secret, refresh_token)

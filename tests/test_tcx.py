@@ -1,5 +1,6 @@
 """probe-tcx: workout selection, TCX summary and the probe flow (all values invented)."""
 
+import gzip
 import json
 
 import pytest
@@ -8,6 +9,7 @@ from fakes import FakeResponse, FakeSession
 from google_health_claude.cli import build_parser
 from google_health_claude.client import HealthClient
 from google_health_claude.credentials import Credentials
+from google_health_claude.derive.points import read_points
 from google_health_claude.probe import probe_tcx
 from google_health_claude.tcx import exercise_id, load_workouts, pick_workouts, summarize_tcx
 
@@ -84,7 +86,9 @@ def test_summary_of_session_without_trackpoints():
     assert s.interval_text().startswith("n/a")
 
 
-@pytest.mark.parametrize("body, expected", [(b"", "empty"), (b"not xml at all", "not valid XML")])
+@pytest.mark.parametrize(
+    ("body", "expected"), [(b"", "empty"), (b"not xml at all", "not valid XML")]
+)
 def test_summary_of_unusable_body(body, expected):
     assert expected in summarize_tcx(body).error
 
@@ -234,3 +238,25 @@ def test_cli_probe_tcx_arguments():
     assert args.command == "probe-tcx"
     assert str(args.data_dir) == "repo"
     assert args.save_samples.parts == ("samples", "tcx")
+
+
+def test_xml_entity_attacks_are_refused(tmp_path):
+    """Backs the S314 noqa in tcx.py and derive/points.py on every Python CI runs.
+
+    ElementTree must not read an external entity, and expat must stop exponential
+    entity expansion (billion laughs) before it allocates the expanded text.
+    """
+    local_file = tmp_path / "local.txt"
+    local_file.write_text("LOCAL-FILE-CONTENT", encoding="utf-8")
+    external = f'<!DOCTYPE r [<!ENTITY x SYSTEM "{local_file.as_uri()}">]><r>&x;</r>'
+    levels = "".join(
+        f'<!ENTITY {chr(98 + i)} "' + f"&{chr(97 + i)};" * 10 + '">' for i in range(7)
+    )  # &h; expands to 10**8 characters
+    laughs = f'<!DOCTYPE r [<!ENTITY a "aaaaaaaaaa">{levels}]><r>&h;</r>'
+
+    for attack in (external, laughs):
+        body = attack.encode()
+        assert "not valid XML" in (summarize_tcx(body).error or "")
+        archive = tmp_path / "attack.tcx.gz"
+        archive.write_bytes(gzip.compress(body))
+        assert read_points(archive) is None

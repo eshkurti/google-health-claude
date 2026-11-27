@@ -86,7 +86,7 @@ def _reply_error(content: bytes) -> str:
     return message if len(message) <= 300 else message[:300] + "..."
 
 
-def export_tcx_for_days(
+def export_tcx_for_days(  # noqa: C901 - split in refactor session
     client: Any, data_dir: Path, days: list[date], log: Callable[[str], None]
 ) -> TcxReport:
     report = TcxReport()
@@ -105,7 +105,9 @@ def export_tcx_for_days(
             ex_id = exercise_id(str(workout.get("name") or ""))
             end_time = str((exercise.get("interval") or {}).get("endTime") or "")
 
-            def fail(status: int, error: str, safe_id: str = ex_id) -> None:
+            def fail(
+                status: int, error: str, safe_id: str = ex_id, day: date = day, kind: str = kind
+            ) -> None:
                 report.failed += 1
                 report.failures.append(
                     {

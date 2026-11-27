@@ -84,7 +84,7 @@ class HealthClient:
 
     # -- authentication -------------------------------------------------
 
-    def _refresh(self) -> None:
+    def _refresh(self) -> str:
         resp = self._session.request(
             "POST",
             TOKEN_URL,
@@ -103,15 +103,22 @@ class HealthClient:
                 "GOOGLE_REFRESH_TOKEN secret."
             )
         body = resp.json()
-        self._access_token = body["access_token"]
+        token = body.get("access_token") if isinstance(body, dict) else None
+        if not isinstance(token, str) or not token:
+            # Never send "Bearer None": stop here, without echoing the reply body.
+            raise AuthError(
+                "Token refresh returned HTTP 200 but no access token. "
+                "Run `python -m google_health_claude auth` again if this persists."
+            )
+        self._access_token = token
         self._expires_at = time.time() + float(body.get("expires_in", 3600)) - 60
         self.refresh_token_expires_in = body.get("refresh_token_expires_in")
+        return token
 
     def _token(self) -> str:
-        if not self._access_token or time.time() >= self._expires_at:
-            self._refresh()
-        assert self._access_token is not None
-        return self._access_token
+        if self._access_token and time.time() < self._expires_at:
+            return self._access_token
+        return self._refresh()
 
     # -- HTTP -----------------------------------------------------------
 

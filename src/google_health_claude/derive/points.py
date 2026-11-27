@@ -19,6 +19,7 @@ import xml.etree.ElementTree as ET
 from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import datetime
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
@@ -48,7 +49,7 @@ def _local(tag: object) -> str:
 def read_points(path: Path) -> list[Point] | None:
     """Trackpoints of a gzipped TCX file, sorted by time; None if unreadable."""
     try:
-        root = ET.fromstring(gzip.decompress(Path(path).read_bytes()))
+        root = ET.fromstring(gzip.decompress(Path(path).read_bytes()))  # noqa: S314 - ElementTree never loads external entities and expat >= 2.4.1 refuses entity-expansion attacks; test_xml_entity_attacks_are_refused checks both
     except (OSError, EOFError, ET.ParseError):
         return None
     by_time: dict[float, Point] = {}
@@ -68,7 +69,7 @@ def read_points(path: Path) -> list[Point] | None:
             else None
         )
 
-        def value(name: str) -> float | None:
+        def value(name: str, fields: dict[str, ET.Element] = fields) -> float | None:
             el = fields.get(name)
             return num(el.text) if el is not None else None
 
@@ -90,20 +91,20 @@ def hr_stats(
     """(time-weighted average, maximum) heart rate within [start, end)."""
     lo = start.timestamp() if start else float("-inf")
     hi = end.timestamp() if end else float("inf")
-    hr_points = [p for p in points if p.hr is not None]
+    hr_points = [(p.ts, p.hr) for p in points if p.hr is not None]
     total = weight = 0.0
     peak: float | None = None
-    for i, p in enumerate(hr_points):
-        if lo <= p.ts < hi:
-            peak = p.hr if peak is None else max(peak, p.hr)
+    for i, (ts, hr) in enumerate(hr_points):
+        if lo <= ts < hi:
+            peak = hr if peak is None else max(peak, hr)
         if i + 1 == len(hr_points):
             break
-        nxt = hr_points[i + 1].ts
-        if not 0 < nxt - p.ts <= HR_MAX_STEP_S:
+        nxt = hr_points[i + 1][0]
+        if not 0 < nxt - ts <= HR_MAX_STEP_S:
             continue
-        overlap = min(nxt, hi) - max(p.ts, lo)
+        overlap = min(nxt, hi) - max(ts, lo)
         if overlap > 0:
-            total += p.hr * overlap
+            total += hr * overlap
             weight += overlap
     return (total / weight if weight else None), peak
 
@@ -147,18 +148,18 @@ def segment_speeds(points: list[Point], segment: list[int]) -> dict[int, float |
     for k, lo, hi in _windowed(points, segment, SPEED_HALF_WINDOW_S):
         a, b = points[segment[lo]], points[segment[hi]]
         dt = b.ts - a.ts
-        speeds[segment[k]] = (b.dist_m - a.dist_m) / dt if dt > 0 else None
+        # Segments only hold points with a distance (gps_segments), so the None checks never fail.
+        if dt > 0 and a.dist_m is not None and b.dist_m is not None:
+            speeds[segment[k]] = (b.dist_m - a.dist_m) / dt
+        else:
+            speeds[segment[k]] = None
     return speeds
 
 
 def segment_altitudes(points: list[Point], segment: list[int]) -> dict[int, float | None]:
     smoothed: dict[int, float | None] = {}
     for k, lo, hi in _windowed(points, segment, ALT_HALF_WINDOW_S):
-        values = [
-            points[segment[j]].alt_m
-            for j in range(lo, hi + 1)
-            if points[segment[j]].alt_m is not None
-        ]
+        values = [alt for j in range(lo, hi + 1) if (alt := points[segment[j]].alt_m) is not None]
         smoothed[segment[k]] = sum(values) / len(values) if values else None
     return smoothed
 
@@ -171,7 +172,7 @@ def walk_seconds(points: list[Point]) -> float | None:
     total = 0.0
     for segment in segments:
         speeds = segment_speeds(points, segment)
-        for prev, idx in zip(segment, segment[1:]):
+        for prev, idx in pairwise(segment):
             speed = speeds[idx]
             if speed is not None and speed < WALK_SPEED_M_S:
                 total += points[idx].ts - points[prev].ts
@@ -180,11 +181,11 @@ def walk_seconds(points: list[Point]) -> float | None:
 
 def hr_half_delta(points: list[Point]) -> float | None:
     """Second-half minus first-half average heart rate, halves split at half the TCX distance."""
-    with_dist = [p for p in points if p.dist_m is not None]
+    with_dist = [(p.t, p.dist_m) for p in points if p.dist_m is not None]
     if len(with_dist) < 2:
         return None
-    middle = (with_dist[0].dist_m + with_dist[-1].dist_m) / 2
-    t_mid = next(p.t for p in with_dist if p.dist_m >= middle)
+    middle = (with_dist[0][1] + with_dist[-1][1]) / 2
+    t_mid = next(t for t, dist in with_dist if dist >= middle)
     first, _ = hr_stats(points, None, t_mid)
     second, _ = hr_stats(points, t_mid, None)
     return None if first is None or second is None else second - first

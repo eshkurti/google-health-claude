@@ -115,7 +115,7 @@ def _warn(message: str) -> None:
     print(prefix + message, file=sys.stderr)
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None) -> int:  # noqa: C901 - split in refactor session
     args = build_parser().parse_args(argv)
 
     if args.command == "auth":

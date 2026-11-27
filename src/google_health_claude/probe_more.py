@@ -17,6 +17,7 @@ import statistics
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -236,7 +237,7 @@ def max_bpm(points: list[Any]) -> float | None:
 
 def median_spacing_s(points: list[Any]) -> float | None:
     moments = sorted(min(ms) for p in points if (ms := instants(p)))
-    gaps = [(b - a).total_seconds() for a, b in zip(moments, moments[1:])]
+    gaps = [(b - a).total_seconds() for a, b in pairwise(moments)]
     return statistics.median(gaps) if gaps else None
 
 
@@ -277,7 +278,8 @@ def _list_all(client: Any, data_type: str, filters: list[str | None]) -> Outcome
             last = err
             if err.status != 400:
                 break
-    assert last is not None
+    if last is None:  # unreachable: callers always pass at least one filter
+        raise RuntimeError(f"no filters to try for {data_type}")
     return Outcome(last.status, [], error=str(last))
 
 
@@ -315,10 +317,12 @@ def probe_more(client: Any, data_dir: Path, today: date, out: Print = print) -> 
     # 1. Heart-rate samples during the latest GPS run.
     out("== 1. heart-rate during the latest FITBIT ACTIVELY_MEASURED RUNNING ==")
     run = pick_workouts(load_workouts(data_dir))["running"]
-    if run is None or not (parse_time(run.start) and parse_time(run.end)):
+    run_start = parse_time(run.start) if run is not None else None
+    run_end = parse_time(run.end) if run is not None else None
+    if run is None or run_start is None or run_end is None:
         out("  SKIP: no run with start and end time in the data repo")
     else:
-        start_s, end_s = _rfc3339(parse_time(run.start)), _rfc3339(parse_time(run.end))
+        start_s, end_s = _rfc3339(run_start), _rfc3339(run_end)
         result = _list_all(client, "heart-rate", instant_filters("heart-rate", start_s, end_s))
         outcomes.append(result)
         _report(out, f"heart-rate (run stored under {run.file_date})", result)

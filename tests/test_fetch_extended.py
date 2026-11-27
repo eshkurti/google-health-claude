@@ -3,6 +3,7 @@
 import gzip
 import json
 from datetime import date, timedelta
+from typing import ClassVar
 
 import pytest
 from fakes import FakeClient
@@ -144,7 +145,7 @@ def cli_calls(monkeypatch):
 
     class Report:
         requests_ok = 1
-        errors = {}
+        errors: ClassVar[dict[str, str]] = {}
 
         class tcx:  # noqa: N801 - mimics the attribute
             failed = 0
@@ -235,7 +236,7 @@ def test_tcx_download_skip_rules_and_storage(tmp_path):
         workout(4, platform="HEALTH_CONNECT"),
     ]
     c.tcx = {"ex1": OK, "ex2": EMPTY}
-    report, logs = run(c, tmp_path)
+    _report, logs = run(c, tmp_path)
 
     assert c.tcx_calls == [
         ("ex1", True),
@@ -310,7 +311,7 @@ def test_tcx_failures_are_recorded_and_do_not_stop_the_run(tmp_path):
         "ex3": RawReply(200, b"<not xml"),
         "ex4": OK,
     }
-    report, logs = run(c, tmp_path)
+    _report, logs = run(c, tmp_path)
 
     assert tcx_file(tmp_path, 4).exists()
     meta = read(tmp_path / "_meta.json")["tcx"]

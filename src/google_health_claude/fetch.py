@@ -130,11 +130,12 @@ def list_range(
             continue
         variant_cache[spec.data_type] = index
         return points
-    assert last_error is not None
+    if last_error is None:  # unreachable: every ListSpec yields two filter spellings
+        raise RuntimeError(f"no filter candidates for {spec.data_type}")
     raise last_error
 
 
-def fetch_range(
+def fetch_range(  # noqa: C901 - split in refactor session
     client: Any,
     start: date,
     end: date,
@@ -164,26 +165,26 @@ def fetch_range(
         report.errors.setdefault(data_type, str(err))
 
     # 1. Aggregated metrics: one request per window of days.
-    for spec in ROLLUP_SPECS:
-        for window_start, window_end in chunks(start, end, spec.max_days):
+    for rollup in ROLLUP_SPECS:
+        for window_start, window_end in chunks(start, end, rollup.max_days):
             try:
                 points = client.daily_rollup(
-                    spec.data_type, window_start, window_end + timedelta(days=1)
+                    rollup.data_type, window_start, window_end + timedelta(days=1)
                 )
             except HealthApiError as err:
-                record_error(spec.data_type, err)
+                record_error(rollup.data_type, err)
                 break
             report.requests_ok += 1
             matched = 0
             for point in points:
                 day = civil_date(point.get("civilStartTime"))
                 if day in metrics:
-                    metrics[day][spec.data_type] = point
+                    metrics[day][rollup.data_type] = point
                     matched += 1
             if points and not matched:
                 # Most likely the day field is not called civilStartTime (unverified).
                 report.errors.setdefault(
-                    spec.data_type,
+                    rollup.data_type,
                     f"{len(points)} rollup point(s) had no civilStartTime date in "
                     f"{window_start}..{window_end}; nothing stored",
                 )

@@ -68,6 +68,22 @@ def test_rejected_refresh_token_raises_auth_error():
         c.list_data_points("sleep")
 
 
+def test_refresh_reply_without_access_token_raises_auth_error():
+    session = FakeSession(
+        [
+            FakeResponse(200, {"access_token": None, "expires_in": 3599}),
+            FakeResponse(200, {"dataPoints": []}),
+        ]
+    )
+    c = HealthClient(CREDS, session=session, sleep=lambda _: None)
+    with pytest.raises(AuthError, match="no access token"):
+        c.list_data_points("steps")
+    assert len(session.calls) == 1  # only the token request; no API call followed
+    assert all(
+        call.get("headers", {}).get("Authorization") != "Bearer None" for call in session.calls
+    )
+
+
 def test_daily_rollup_request_body():
     c, session = client([FakeResponse(200, {"rollupDataPoints": [{"x": 1}]})])
     points = c.daily_rollup("steps", date(2026, 11, 24), date(2026, 11, 26))

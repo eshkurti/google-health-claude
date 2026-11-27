@@ -142,7 +142,7 @@ def splits_from(start: datetime, points) -> list[dict]:
                     "endUtcOffset": "3600s",
                     "activeDuration": f"{seconds:g}s",
                     "metricsSummary": {
-                        "distanceMillimeters": int(round(metres * 1000)),
+                        "distanceMillimeters": round(metres * 1000),
                         "averagePaceSecondsPerMeter": seconds / metres,
                     },
                 }
@@ -171,7 +171,7 @@ def workout(
 ):
     end = start + timedelta(seconds=seconds)
     summary = {
-        "distanceMillimeters": int(round(distance_m * 1000)),
+        "distanceMillimeters": round(distance_m * 1000),
         "averagePaceSecondsPerMeter": seconds / distance_m if distance_m else 0.0,
     }
     if steps is not None:
@@ -181,7 +181,8 @@ def workout(
         summary["caloriesKcal"] = int(seconds / 6)
     if zones is not None:
         summary["heartRateZoneDurations"] = {
-            f"{n}Time": f"{s}s" for n, s in zip(("light", "moderate", "vigorous", "peak"), zones)
+            f"{n}Time": f"{s}s"
+            for n, s in zip(("light", "moderate", "vigorous", "peak"), zones, strict=True)
         }
     if azm is not None:
         summary["activeZoneMinutes"] = str(azm)

@@ -20,7 +20,7 @@ def cell(value: Any, kind: str) -> str:
     if kind == "BOOL":
         return "true" if value else "false"
     if kind == "INTEGER":
-        return str(int(round(value)))
+        return str(round(value))
     if kind == "REAL":
         text = f"{float(value):.{DECIMALS}f}".rstrip("0").rstrip(".")
         return "0" if text == "-0" else text
@@ -31,7 +31,7 @@ def sql_value(value: Any, kind: str) -> Any:
     if value is None:
         return None
     if kind in ("BOOL", "INTEGER"):
-        return int(round(value))
+        return round(value)
     if kind == "REAL":
         return round(float(value), DECIMALS)
     return str(value)
@@ -103,7 +103,7 @@ def write_sqlite(
             conn.execute(table.ddl())
             placeholders = ", ".join("?" for _ in table.columns)
             conn.executemany(
-                f"INSERT INTO {table.name} ({', '.join(table.names)}) VALUES ({placeholders})",
+                f"INSERT INTO {table.name} ({', '.join(table.names)}) VALUES ({placeholders})",  # noqa: S608 - identifiers come from schema.py constants; values use ? placeholders
                 ([sql_value(row.get(c.name), c.kind) for c in table.columns] for row in rows),
             )
         conn.commit()

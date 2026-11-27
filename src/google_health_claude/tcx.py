@@ -186,7 +186,7 @@ def summarize_tcx(content: bytes) -> TcxSummary:
         summary.error = "empty body"
         return summary
     try:
-        root = ET.fromstring(content)
+        root = ET.fromstring(content)  # noqa: S314 - ElementTree never loads external entities and expat >= 2.4.1 refuses entity-expansion attacks; test_xml_entity_attacks_are_refused checks both
     except ET.ParseError as err:
         # The position in the message is line/column only, never body content.
         line, column = err.position

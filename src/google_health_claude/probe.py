@@ -23,7 +23,7 @@ from .fetch import list_for_day
 from .tcx import TARGETS, Workout, load_workouts, pick_workouts, summarize_tcx
 
 
-def probe(client: Any, day: date, save_dir: Path | None = None) -> int:
+def probe(client: Any, day: date, save_dir: Path | None = None) -> int:  # noqa: C901 - split in refactor session
     """Returns the number of data types that failed."""
     failures = 0
 
@@ -63,16 +63,16 @@ def probe(client: Any, day: date, save_dir: Path | None = None) -> int:
         if points:
             save(spec.data_type, points)
 
-    for spec in ROLLUP_SPECS:
+    for rollup in ROLLUP_SPECS:
         try:
-            points = client.daily_rollup(spec.data_type, day, day + timedelta(days=1))
+            points = client.daily_rollup(rollup.data_type, day, day + timedelta(days=1))
         except HealthApiError as err:
-            out("FAIL", spec.data_type + " (rollup)", str(err))
+            out("FAIL", rollup.data_type + " (rollup)", str(err))
             failures += 1
             continue
-        out("OK" if points else "EMPTY", spec.data_type + " (rollup)", f"{len(points)} point(s)")
+        out("OK" if points else "EMPTY", rollup.data_type + " (rollup)", f"{len(points)} point(s)")
         if points:
-            save(spec.data_type + "_rollup", points)
+            save(rollup.data_type + "_rollup", points)
 
     print(
         "\nrefresh_token_expires_in reported by Google:",

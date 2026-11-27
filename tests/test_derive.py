@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import csv
 import sqlite3
+from contextlib import closing
 from datetime import date, timedelta
+from itertools import pairwise
 
 import pytest
 from derive_fixtures import AS_OF, COORD_MARKERS, build_dataset
@@ -267,7 +269,9 @@ def test_hrv_outlier_is_flagged_on_its_day_only(run):
 def _last_flag(baseline, value, column):
     """Flag of `value` on the day after a run of daily `baseline` values."""
     days = [date(2026, 11, 1) + timedelta(days=i) for i in range(len(baseline) + 1)]
-    return outlier_flags(dict(zip(days, [*baseline, value])), OUTLIER_RULES[column])[days[-1]]
+    return outlier_flags(dict(zip(days, [*baseline, value], strict=True)), OUTLIER_RULES[column])[
+        days[-1]
+    ]
 
 
 def test_resting_hr_66_against_a_70_baseline_is_not_an_outlier():
@@ -289,7 +293,7 @@ def test_hrv_dropout_is_flagged_even_in_a_noisy_baseline():
     # misses it; the low-ratio check (below 50% of the median) catches it.
     baseline = [28, 39, 16, 47, 32, 63, 67, 54, 43, 62, 60, 58, 66, 53, 48, 51]
     days = [date(2026, 11, 1) + timedelta(days=i) for i in range(len(baseline) + 1)]
-    series = dict(zip(days, [*baseline, 15]))
+    series = dict(zip(days, [*baseline, 15], strict=True))
     assert outlier_flags(series, OutlierRule(min_share=0.12))[days[-1]] is False
     assert _last_flag(baseline, 15, "hrv_ms") is True
     assert _last_flag([65, 66, 67, 68, 69, 70] * 3, 14.9, "hrv_ms") is True
@@ -302,7 +306,7 @@ def test_outliers_need_14_values_of_history():
 
 def test_weeks_run_monday_to_sunday(run):
     weekly = by(run["table"]("weekly"), "week_start")
-    assert list(weekly)[0] == "2026-10-19" and weekly["2026-11-09"]["week_end"] == "2026-11-15"
+    assert next(iter(weekly)) == "2026-10-19" and weekly["2026-11-09"]["week_end"] == "2026-11-15"
     nov9, nov16, nov23 = weekly["2026-11-09"], weekly["2026-11-16"], weekly["2026-11-23"]
     assert (
         nov9["runs"] == "1" and float(nov9["run_km"]) == 2.52
@@ -331,7 +335,7 @@ def test_no_coordinates_anywhere(run):
         content = path.read_bytes()
         for marker in COORD_MARKERS:
             assert marker.encode() not in content, path.name
-    with sqlite3.connect(run["db"]) as conn:
+    with closing(sqlite3.connect(run["db"])) as conn:
         columns = {row[1] for row in conn.execute("PRAGMA table_info(exercise_points)")}
     assert not columns & {"lat", "lon", "latitude", "longitude", "position"}
 
@@ -351,7 +355,7 @@ def test_sqlite_has_every_table_and_valid_foreign_keys(run):
 
 
 def test_exercise_points_do_not_bridge_gps_gaps(run):
-    with sqlite3.connect(run["db"]) as conn:
+    with closing(sqlite3.connect(run["db"])) as conn:
         rows = conn.execute(
             "SELECT t_s, speed_m_s, alt_m FROM exercise_points WHERE workout_id='runA' ORDER BY t_s"
         ).fetchall()
@@ -364,7 +368,7 @@ def test_exercise_points_do_not_bridge_gps_gaps(run):
     # Smoothing never mixes the altitude before the gap (~50 m) with the one after it (~80 m).
     assert all(abs(alt - 50) <= 3 for t, _, alt in rows if t <= 200)
     assert all(abs(alt - 80) <= 3 for t, _, alt in rows if t >= 221)
-    with sqlite3.connect(run["db"]) as conn:
+    with closing(sqlite3.connect(run["db"])) as conn:
         short_gap = conn.execute(
             "SELECT t_s, alt_m FROM exercise_points WHERE workout_id='runD' ORDER BY t_s"
         ).fetchall()
@@ -384,14 +388,14 @@ def test_rerun_is_byte_stable_and_notes_are_never_overwritten(run, tmp_path):
     report = derive(run["data"], run["out"], db, log=lambda m: None)
     assert report.files_changed == 0 and not report.notes_created
     assert {p.name: p.read_bytes() for p in run["out"].iterdir()} == before
-    with sqlite3.connect(db) as conn:
+    with closing(sqlite3.connect(db)) as conn:
         assert conn.execute("SELECT date, rpe_1_10, feeling FROM notes").fetchall() == [
             ("2026-11-19", "7", "tired")
         ]
 
 
 def test_output_inside_the_data_folder_is_refused(run):
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="must not be inside the data folder"):
         derive(run["data"], run["data"] / "derived", log=lambda m: None)
 
 
@@ -419,4 +423,4 @@ def test_cli_derive(run, tmp_path, capsys):
 
 def test_strength_fixture_is_irregular(run):
     times = [t for t, _, _ in run["facts"]["strength_points"]]
-    assert {b - a for a, b in zip(times, times[1:])} == {1, 3}
+    assert {b - a for a, b in pairwise(times)} == {1, 3}

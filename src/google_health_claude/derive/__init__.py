@@ -63,7 +63,8 @@ def derive(
             or data_dir.resolve() in Path(target).resolve().parents
         ):
             raise ValueError(f"{label} must not be inside the data folder")
-    report = DeriveReport(as_of=as_of or default_as_of(data_dir))
+    as_of = as_of or default_as_of(data_dir)
+    report = DeriveReport(as_of=as_of)
 
     workouts = build_workouts(data_dir, report.warnings.append)
     tables = {
@@ -71,7 +72,7 @@ def derive(
         "run_splits": workouts.run_splits,
         "run_facts": workouts.run_facts,
         "personal_bests": workouts.personal_bests,
-        **build_days(data_dir, workouts, report.as_of),
+        **build_days(data_dir, workouts, as_of),
     }
     report.files_changed = write_csvs(out_dir, tables)
     report.notes_created = ensure_notes(out_dir)
