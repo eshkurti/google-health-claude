@@ -2,7 +2,7 @@
 
 Pulls my own Google Health (Fitbit Air) data every day into a private git repo, so I can chat with Claude about training, sleep and recovery with real numbers behind the answers.
 
-**Status:** first version. The code is unit-tested with fake API responses but has not yet been run against live data. First use case: training for my first marathon (Rome, 14 March 2027).
+**Status:** runs every day against live data. First use case: training for my first marathon (Rome, 14 March 2027). Changes are listed in the [changelog](CHANGELOG.md).
 
 ## How it works
 
@@ -52,6 +52,34 @@ After the workouts are stored, a TCX file is downloaded (with `partialData=true`
 - **Honest blanks.** Numbers stored as strings and `"123s"` durations become numbers, and units go into column names. Times are in Europe/Berlin. A missing value stays empty and is never written as 0. The last three days are flagged as partial.
 - **Weigh-ins in their own table.** `weight` lists every weigh-in, including the 180-day lookback, with same-day duplicates merged. Days and weeks that only have a weigh-in get no rows in `daily`, `quality` or `weekly`.
 - **Byte-stable.** Unchanged input gives identical CSV files.
+
+`query` reads those tables back as JSON, filtered by date, without touching the raw data: `daily`, `sleep` (with stages), `runs` (with splits and run facts), `weekly`, `pbs` and `freshness` (which days are still partial and, with `--meta`, when the last fetch ran). From Python, `google_health_claude.query.HealthData` gives the same answers as typed, frozen dataclasses.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    API[Google Health API] --> F[fetch/]
+    F --> R[("data folder<br/>raw JSON + TCX")]
+    R --> L[derive/load.py]
+    L --> B["derive/ workouts, days, points<br/>(no I/O)"]
+    B --> O[derive/output.py]
+    O --> D[("derived folder<br/>CSV + SQLite")]
+    D --> Q[query/]
+```
+
+| Package | Job |
+|---|---|
+| `cli.py` | parses arguments and dispatches through a command table |
+| `api/` | HTTP client (token refresh, retries, pagination), credentials, the one-time sign-in |
+| `fetch/` | what to fetch, the filter-spelling fallback, TCX downloads; the only writer of the data folder |
+| `derive/` | `load.py` reads the data folder, the table code is pure, `output.py` writes CSV and SQLite |
+| `query/` | typed, date-filtered reads of the derived CSVs |
+| `demo/` | invented raw data in fetch's layout |
+| `devtools/` | `probe`, `probe-tcx` and `probe-more`: live API exploration |
+| `records.py`, `config.py` | pure record helpers and constants shared by every layer |
+
+Dependencies point one way, and `tests/test_architecture.py` checks it from the source: `derive` never imports `api` or `fetch`, `query` imports nothing from the package but `derive/schema.py`, only `cli` imports `devtools` and `demo`, and `records` and `config` import nothing from the package. Every module is checked with strict mypy, and `tests/test_cli_contract.py` pins every existing subcommand and option, because the data repo's daily workflow depends on them.
 
 ## Design notes
 
@@ -103,6 +131,9 @@ python -m google_health_claude backfill --client-secret path\to\client_secret.js
 
 # 4. build the derived tables (no network; keep the output out of public repos)
 python -m google_health_claude derive --data-dir path\to\data --out path\to\derived --sqlite path\to\health.sqlite
+
+# 5. read them back as JSON (also sleep, runs, weekly, pbs, and freshness --meta path\to\data\_meta.json)
+python -m google_health_claude query daily --derived path\to\derived --start 2026-11-01 --end 2026-11-07
 ```
 
 In CI the credentials come from the environment variables `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `GOOGLE_REFRESH_TOKEN`.
