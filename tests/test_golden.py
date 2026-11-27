@@ -17,10 +17,12 @@ from __future__ import annotations
 
 import csv
 import difflib
+import gzip
 import hashlib
 import io
 import shutil
 import sqlite3
+import zlib
 from contextlib import closing
 from pathlib import Path
 
@@ -53,18 +55,37 @@ def assert_same_tree(actual: Path, expected: Path) -> None:
     for name in sorted(want):
         if got[name] == want[name]:
             continue
-        if name.endswith(TEXT_SUFFIXES):
-            diff = difflib.unified_diff(
-                want[name].decode("utf-8").splitlines(),
-                got[name].decode("utf-8").splitlines(),
-                f"expected/{name}",
-                f"actual/{name}",
-                lineterm="",
+        expected_text, actual_text = want[name], got[name]
+        if name.endswith(".gz"):
+            expected_text, actual_text = gzip.decompress(want[name]), gzip.decompress(got[name])
+            if expected_text == actual_text:
+                pytest.fail(
+                    f"{name}: content identical, only the gzip stream differs "
+                    f"({len(want[name])} bytes expected, {len(got[name])} actual; "
+                    f"zlib {zlib.ZLIB_RUNTIME_VERSION})"
+                )
+        elif not name.endswith(TEXT_SUFFIXES):
+            pytest.fail(
+                f"{name} differs ({len(want[name])} bytes expected, {len(got[name])} actual)"
             )
-            shown = list(diff)
-            more = f"\n... {len(shown) - 80} more diff lines" if len(shown) > 80 else ""
-            pytest.fail(f"{name} differs:\n" + "\n".join(shown[:80]) + more)
-        pytest.fail(f"{name} differs ({len(want[name])} bytes expected, {len(got[name])} actual)")
+        diff = difflib.unified_diff(
+            _lines(expected_text),
+            _lines(actual_text),
+            f"expected/{name}",
+            f"actual/{name}",
+            lineterm="",
+        )
+        shown = list(diff)
+        more = f"\n... {len(shown) - 80} more diff lines" if len(shown) > 80 else ""
+        pytest.fail(f"{name} differs:\n" + "\n".join(shown[:80]) + more)
+
+
+def _lines(content: bytes) -> list[str]:
+    """Text lines; single-line XML (TCX) is split into one element per line."""
+    text = content.decode("utf-8")
+    return (
+        text.replace("><", ">\n<").splitlines() if text.startswith("<?xml") else text.splitlines()
+    )
 
 
 def sqlite_cells(conn: sqlite3.Connection, table: Table) -> list[list[str]]:
