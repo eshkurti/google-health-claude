@@ -15,6 +15,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from itertools import groupby
+from math import fsum
 from pathlib import Path
 from statistics import median
 from typing import Any
@@ -216,7 +217,7 @@ def workout_row(s: Session, data_dir: Path) -> dict[str, Any]:
     zones = summary.get("heartRateZoneDurations") or {}
     zone_min = {z: scaled(zones.get(f"{z}Time"), 1 / 60) for z in ZONES}
     zone_total = (
-        sum(v for v in zone_min.values() if v is not None)
+        fsum(v for v in zone_min.values() if v is not None)
         if any(v is not None for v in zone_min.values())
         else None
     )
@@ -306,8 +307,8 @@ def pace_fade(splits: list[dict[str, Any]]) -> float | None:
     if not raw or any(d is None or t is None or d <= 0 for d, t in raw):
         return None
     parts: list[tuple[float, float]] = raw  # checked above: no None, positive distances
-    total_km = sum(d for d, _ in parts)
-    total_s = sum(t for _, t in parts)
+    total_km = fsum(d for d, _ in parts)
+    total_s = fsum(t for _, t in parts)
     half = total_km / 2
     covered = elapsed = 0.0
     for d, t in parts:

@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import csv
+import math
 import sqlite3
 from contextlib import closing
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from itertools import pairwise
 
 import pytest
@@ -15,9 +16,9 @@ from google_health_claude.cli import main
 from google_health_claude.derive import derive
 from google_health_claude.derive.days import OUTLIER_RULES, OutlierRule, outlier_flags
 from google_health_claude.derive.output import cell
-from google_health_claude.derive.points import hr_stats, read_points
+from google_health_claude.derive.points import Point, hr_stats, read_points, segment_altitudes
 from google_health_claude.derive.schema import TABLES
-from google_health_claude.derive.values import num
+from google_health_claude.derive.values import mean, num
 
 
 @pytest.fixture(scope="module")
@@ -47,6 +48,24 @@ def test_numeric_strings_and_durations_become_numbers():
     assert num("8165") == 8165
     assert num("1422.323s") == pytest.approx(1422.323)
     assert num(12) == 12 and num(None) is None and num("n/a") is None and num(True) is None
+
+
+# Exact binary values whose plain left-to-right sum (Python < 3.12) and compensated sum()
+# (Python 3.12+) both round differently from the correctly rounded math.fsum: averages
+# must not depend on the Python version (a golden digest once differed on 3.10/3.11).
+UNSTABLE_SUM = [-3 * 2.0**40, -(2.0**53), 5 * 2.0**-56, 5.0]
+
+
+def test_float_sums_in_derive_are_correctly_rounded_on_every_python():
+    exact = math.fsum(UNSTABLE_SUM) / len(UNSTABLE_SUM)
+    assert sum(UNSTABLE_SUM) / len(UNSTABLE_SUM) != exact  # the trap is real here
+    assert mean(UNSTABLE_SUM) == exact
+    points = [
+        Point(datetime.fromtimestamp(t, timezone.utc), t, None, float(t), alt, True)
+        for t, alt in enumerate(UNSTABLE_SUM)
+    ]
+    smoothed = segment_altitudes(points, [0, 1, 2, 3])  # all four within the 30 s window
+    assert set(smoothed.values()) == {exact}
 
 
 def test_cells_keep_missing_empty_and_zero_as_zero():

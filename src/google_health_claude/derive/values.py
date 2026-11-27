@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from datetime import date, datetime, timedelta
+from math import fsum
 from statistics import median
 from typing import Any, overload
 from zoneinfo import ZoneInfo
@@ -109,7 +110,7 @@ def minutes_between(start: datetime | None, end: datetime | None) -> float | Non
 
 def mean(values: Iterable[float | None]) -> float | None:
     present = [v for v in values if v is not None]
-    return sum(present) / len(present) if present else None
+    return fsum(present) / len(present) if present else None
 
 
 def weighted_mean(pairs: Iterable[tuple[float | None, float | None]]) -> float | None:

@@ -20,6 +20,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import datetime
 from itertools import pairwise
+from math import fsum
 from pathlib import Path
 from typing import Any
 
@@ -160,7 +161,7 @@ def segment_altitudes(points: list[Point], segment: list[int]) -> dict[int, floa
     smoothed: dict[int, float | None] = {}
     for k, lo, hi in _windowed(points, segment, ALT_HALF_WINDOW_S):
         values = [alt for j in range(lo, hi + 1) if (alt := points[segment[j]].alt_m) is not None]
-        smoothed[segment[k]] = sum(values) / len(values) if values else None
+        smoothed[segment[k]] = fsum(values) / len(values) if values else None
     return smoothed
 
 

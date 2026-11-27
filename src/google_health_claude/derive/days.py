@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
+from math import fsum
 from pathlib import Path
 from statistics import median
 from typing import Any
@@ -252,7 +253,7 @@ def daily_row(
         "active_light_min": active.get("LIGHT"),
         "active_moderate_min": active.get("MODERATE"),
         "active_vigorous_min": active.get("VIGOROUS"),
-        "azm_points": sum(azm_present) if azm_present else None,
+        "azm_points": fsum(azm_present) if azm_present else None,
         "weight_kg": weight_kg,
         "is_partial": is_partial,
     }
@@ -311,7 +312,7 @@ def sleep_rows(
                     "light_min": by_stage.get("LIGHT"),
                     "latency_min": num(summary.get("minutesToFallAsleep")),
                     "short_awakenings_count": len(short),
-                    "short_awakenings_min": sum(m for m in short_min if m is not None),
+                    "short_awakenings_min": fsum(m for m in short_min if m is not None),
                     "efficiency_pct": asleep_min / in_bed * 100
                     if asleep_min is not None and in_bed
                     else None,
@@ -464,9 +465,9 @@ def weekly_rows(
         ]
         has_any = bool(with_data or runs)
         zone_runs = [w for w in runs if w["hard_share"] is not None]
-        hard = sum(w["min_vigorous"] + w["min_peak"] for w in zone_runs)
-        zone_total = sum(
-            sum(w[f"min_{z}"] or 0 for z in ("light", "moderate", "vigorous", "peak"))
+        hard = fsum(w["min_vigorous"] + w["min_peak"] for w in zone_runs)
+        zone_total = fsum(
+            fsum(w[f"min_{z}"] or 0 for z in ("light", "moderate", "vigorous", "peak"))
             for w in zone_runs
         )
         main_sleep = [r["asleep_h"] for r in sleep if r["date"] in days and r["is_main"]]
@@ -476,7 +477,7 @@ def weekly_rows(
             key: str, runs: list[dict[str, Any]] = runs, has_any: bool = has_any
         ) -> float | None:
             values = [w[key] for w in runs if w[key] is not None]
-            return sum(values) if values else (0.0 if has_any and not runs else None)
+            return fsum(values) if values else (0.0 if has_any and not runs else None)
 
         rows.append(
             {
@@ -490,7 +491,7 @@ def weekly_rows(
                 "run_duration_min": total("duration_min"),
                 "run_avg_hr_bpm": weighted_mean((w["avg_hr_bpm"], w["duration_min"]) for w in runs),
                 "run_hard_share": hard / zone_total if zone_total else None,
-                "azm_points": sum(azm) if azm else None,
+                "azm_points": fsum(azm) if azm else None,
                 "sleep_h_avg": mean(main_sleep),
                 "resting_hr_avg_bpm": mean(r["resting_hr_bpm"] for r in rows_in),
                 "hrv_avg_ms": mean(r["hrv_ms"] for r in rows_in),
