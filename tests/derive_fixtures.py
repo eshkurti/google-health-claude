@@ -389,6 +389,9 @@ def build_dataset(root: Path) -> dict:
             zones=(300, 600, 0, 0),
         ),
     )
+    # Deliberately unrealistic, keep it: fetch today never stores an empty TCX export
+    # (zero trackpoints are counted as "empty" and not written). This file tests that
+    # derive survives one anyway, e.g. from older data. Do not "fix" it.
     write_tcx(root, date(2026, 11, 18), "card1", tcx_bytes(card_start, [], gps=False))
     add(
         date(2026, 11, 21),
