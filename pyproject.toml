@@ -16,7 +16,17 @@ dependencies = [
 
 [project.optional-dependencies]
 auth = ["google-auth-oauthlib>=1.2"]
-dev = ["pytest>=8", "google-auth-oauthlib>=1.2"]
+dev = [
+    "pytest>=8",
+    "pytest-cov>=7.1",
+    "google-auth-oauthlib>=1.2",
+    # ruff and mypy are pinned to a minor series: new releases add rules and checks,
+    # and CI should only fail because of a code change. Dependabot bumps them.
+    "ruff>=0.17.6,<0.18",
+    "mypy>=2.4.1,<2.5",
+    "types-requests>=2.33",
+    "pre-commit>=4.7",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -24,3 +34,93 @@ where = ["src"]
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["google_health_claude"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
+skip_covered = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+    "E", "W",    # pycodestyle
+    "F",         # pyflakes: undefined names, unused imports
+    "I",         # isort: deterministic import order
+    "B",         # bugbear: likely bugs (loop closures, zip truncation)
+    "UP",        # pyupgrade: syntax for the minimum Python
+    "C4",        # comprehensions
+    "SIM",       # simplifiable control flow
+    "RUF",       # ruff-specific, incl. RUF100 (every noqa must be needed)
+    "PT",        # pytest idioms
+    "C90",       # mccabe complexity
+    "PLE", "PLW", # pylint errors and warnings (not the noisy PLR refactor rules)
+    "S",         # bandit: this code handles OAuth tokens and health data
+    "DTZ",       # naive datetimes: the data is timezoned
+    "BLE",       # blind except: a daily job must not hide failures
+    "N",         # pep8-naming
+]
+ignore = [
+    "E501",   # the formatter owns line length; what remains is long strings and URLs
+    "PT018",  # compound asserts read fine in these tests
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]  # pytest asserts
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.isort]
+known-first-party = ["google_health_claude"]
+
+[tool.mypy]
+python_version = "3.10"
+files = ["src"]
+mypy_path = "src"
+# Strict by default, so new modules and packages start strict. A per-module
+# `strict = true` override would leak to every module, hence this direction.
+strict = true
+
+# Modules written before mypy was adopted: default (non-strict) checking.
+# Remove a module from this list once it passes strict.
+[[tool.mypy.overrides]]
+module = [
+    "google_health_claude",
+    "google_health_claude.__main__",
+    "google_health_claude.auth",
+    "google_health_claude.cli",
+    "google_health_claude.client",
+    "google_health_claude.config",
+    "google_health_claude.credentials",
+    "google_health_claude.datatypes",
+    "google_health_claude.fetch",
+    "google_health_claude.probe",
+    "google_health_claude.probe_more",
+    "google_health_claude.store",
+    "google_health_claude.tcx",
+    "google_health_claude.workout_tcx",
+]
+disallow_any_generics = false
+disallow_subclassing_any = false
+disallow_untyped_calls = false
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+check_untyped_defs = false
+disallow_untyped_decorators = false
+warn_unused_ignores = false
+warn_return_any = false
+no_implicit_reexport = false
+strict_equality = false
+extra_checks = false
+
+# google-auth-oauthlib ships neither type hints nor a stub package.
+[[tool.mypy.overrides]]
+module = ["google_auth_oauthlib.*"]
+ignore_missing_imports = true
