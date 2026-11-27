@@ -185,7 +185,7 @@ def main(argv: list[str] | None = None) -> int:  # noqa: C901 - split in refacto
             return 1 if probe_tcx(client, args.data_dir, args.save_samples) else 0
 
         if args.command == "probe-more":
-            from .probe_more import probe_more
+            from .devtools.probe_more import probe_more
 
             return 1 if probe_more(client, args.data_dir, today()) else 0
 

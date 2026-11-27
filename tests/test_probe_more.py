@@ -9,7 +9,7 @@ from fakes import FakeResponse, FakeSession
 from google_health_claude.api.client import HealthApiError, HealthClient
 from google_health_claude.api.credentials import Credentials
 from google_health_claude.cli import build_parser
-from google_health_claude.probe_more import (
+from google_health_claude.devtools.probe_more import (
     GUESSED_TYPES,
     OTHER_TYPES,
     TypeInfo,

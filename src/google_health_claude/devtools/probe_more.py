@@ -22,11 +22,11 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from .api.client import HealthApiError
-from .config import TIMEZONE
-from .devtools.probe_tcx import load_workouts, pick_workouts
-from .fetch.datatypes import camel, snake
-from .records import parse_time
+from ..api.client import HealthApi, HealthApiError
+from ..config import TIMEZONE
+from ..fetch.datatypes import camel, snake
+from ..records import parse_time
+from .probe_tcx import load_workouts, pick_workouts
 
 # The API refusing a type is a finding, not a crash.
 EXPECTED_REFUSALS = (400, 403, 404)
@@ -268,7 +268,7 @@ class Outcome:
     error: str | None = None
 
 
-def _list_all(client: Any, data_type: str, filters: list[str | None]) -> Outcome:
+def _list_all(client: HealthApi, data_type: str, filters: list[str | None]) -> Outcome:
     """List with full pagination, trying filter spellings on HTTP 400."""
     last: HealthApiError | None = None
     for flt in filters:
@@ -284,7 +284,7 @@ def _list_all(client: Any, data_type: str, filters: list[str | None]) -> Outcome
     return Outcome(last.status, [], error=str(last))
 
 
-def _one_call(client: Any, info: TypeInfo, start: date, end_exclusive: date) -> Outcome:
+def _one_call(client: HealthApi, info: TypeInfo, start: date, end_exclusive: date) -> Outcome:
     """Exactly one request for the type (snake_case filter only)."""
     try:
         if info.kind == ROLLUP:
@@ -310,7 +310,7 @@ def _report(out: Print, title: str, result: Outcome, details: bool = True) -> No
         out(f"  {time_range(result.points)}")
 
 
-def probe_more(client: Any, data_dir: Path, today: date, out: Print = print) -> int:
+def probe_more(client: HealthApi, data_dir: Path, today: date, out: Print = print) -> int:
     """Returns the number of calls that failed for reasons other than 400/403/404."""
     outcomes: list[Outcome] = []
     end = today + timedelta(days=1)
