@@ -8,6 +8,7 @@ day-based tables cover fetched days, i.e. days with any data besides weight.
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from statistics import median
@@ -21,9 +22,27 @@ from .workouts import WorkoutTables
 
 PARTIAL_DAYS = 3
 OUTLIER_WINDOW_DAYS = 28
-OUTLIER_MIN_VALUES = 7
+OUTLIER_MIN_VALUES = 14
 OUTLIER_MADS = 3.0
-MAD_FLOOR_SHARE = 0.01
+MAD_SCALE = 1.4826  # makes the MAD comparable to a standard deviation for normal data
+
+
+@dataclass(frozen=True)
+class OutlierRule:
+    """Per-column settings. The minimum spread keeps integer-valued or very stable metrics
+    (MAD near 0) from flagging ordinary small moves; low_ratio also flags any value below
+    that share of the median, which catches sensor dropouts in a noisy baseline."""
+
+    min_abs: float = 0.0
+    min_share: float = 0.0
+    low_ratio: float | None = None
+
+
+OUTLIER_RULES = {
+    "hrv_ms": OutlierRule(min_share=0.12, low_ratio=0.5),
+    "resting_hr_bpm": OutlierRule(min_abs=3.0),
+    "spo2_avg_pct": OutlierRule(min_abs=1.0),
+}
 WEIGHT_DUPLICATE_WINDOW = timedelta(minutes=10)
 ZONES = ("LIGHT", "MODERATE", "VIGOROUS", "PEAK")
 
@@ -208,8 +227,13 @@ def sleep_rows(nights: dict[date, dict]) -> tuple[list[dict], list[dict]]:
     return sessions, stages
 
 
-def outlier_flags(series: dict[date, float]) -> dict[date, bool | None]:
-    """True if a value is more than 3 MAD from the median of the 28 days before it."""
+def outlier_flags(series: dict[date, float], rule: OutlierRule) -> dict[date, bool | None]:
+    """True if a value is more than 3 spreads from the median of the 28 days before it,
+    or below rule.low_ratio x median.
+
+    spread = max(1.4826 x MAD, rule.min_abs, rule.min_share x |median|). None when the
+    window holds fewer than 14 values.
+    """
     flags: dict[date, bool | None] = {}
     for day, value in series.items():
         window = [series[d] for d in (day - timedelta(days=i) for i in range(1, OUTLIER_WINDOW_DAYS + 1))
@@ -218,8 +242,10 @@ def outlier_flags(series: dict[date, float]) -> dict[date, bool | None]:
             flags[day] = None
             continue
         center = median(window)
-        mad = max(median(abs(v - center) for v in window), MAD_FLOOR_SHARE * abs(center))
-        flags[day] = abs(value - center) > OUTLIER_MADS * mad
+        mad = median(abs(v - center) for v in window)
+        spread = max(MAD_SCALE * mad, rule.min_abs, rule.min_share * abs(center))
+        too_low = rule.low_ratio is not None and value < rule.low_ratio * center
+        flags[day] = too_low or abs(value - center) > OUTLIER_MADS * spread
     return flags
 
 
@@ -248,8 +274,8 @@ def build_days(data_dir: Path, workouts: WorkoutTables, as_of: date) -> dict[str
 
     by_day = {date.fromisoformat(r["date"]): r for r in daily}
     flags = {
-        column: outlier_flags({d: r[column] for d, r in by_day.items() if r[column] is not None})
-        for column in ("hrv_ms", "resting_hr_bpm", "spo2_avg_pct")
+        column: outlier_flags({d: r[column] for d, r in by_day.items() if r[column] is not None}, rule)
+        for column, rule in OUTLIER_RULES.items()
     }
     sleep_days = {r["date"] for r in sleep}
     tcx_needed: dict[str, list[bool]] = {}

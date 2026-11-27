@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import csv
 import sqlite3
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 
 from derive_fixtures import AS_OF, COORD_MARKERS, build_dataset
 from google_health_claude.cli import main
 from google_health_claude.derive import derive
+from google_health_claude.derive.days import OUTLIER_RULES, OutlierRule, outlier_flags
 from google_health_claude.derive.output import cell
 from google_health_claude.derive.points import hr_stats, read_points
 from google_health_claude.derive.schema import TABLES
@@ -233,6 +234,42 @@ def test_hrv_outlier_is_flagged_on_its_day_only(run):
     assert not any(q["resting_hr_outlier"] == "true" or q["spo2_outlier"] == "true" for q in quality)
     assert by(quality, "date")["2026-10-19"]["hrv_outlier"] == ""  # no history yet
     assert "daily-oxygen-saturation" in by(quality, "date")["2026-11-12"]["missing_metrics"]
+
+
+def _last_flag(baseline, value, column):
+    """Flag of `value` on the day after a run of daily `baseline` values."""
+    days = [date(2026, 11, 1) + timedelta(days=i) for i in range(len(baseline) + 1)]
+    return outlier_flags(dict(zip(days, [*baseline, value])), OUTLIER_RULES[column])[days[-1]]
+
+
+def test_resting_hr_66_against_a_70_baseline_is_not_an_outlier():
+    # Integer readings: the MAD is 0 for a flat baseline and 1 for 69-71; the 3 bpm floor holds.
+    assert _last_flag([70] * 20, 66, "resting_hr_bpm") is False
+    assert _last_flag([69, 70, 71] * 7, 66, "resting_hr_bpm") is False
+    assert _last_flag([69, 70, 71] * 7, 80, "resting_hr_bpm") is True
+
+
+def test_hrv_88_against_a_65_to_70_baseline_is_not_an_outlier():
+    # Evenly spread 65-70 (median 67.5): the 12% floor gives a threshold of +-24.3 ms.
+    assert _last_flag([65, 66, 67, 68, 69, 70] * 3, 88, "hrv_ms") is False
+    assert _last_flag([65, 70] * 10, 88, "hrv_ms") is False
+
+
+def test_hrv_dropout_is_flagged_even_in_a_noisy_baseline():
+    # A first-weeks baseline with an earlier dropout (16) and low early readings:
+    # median 52, spread 14.1, so 15 ms is only 2.6 spreads low. The MAD rule alone
+    # misses it; the low-ratio check (below 50% of the median) catches it.
+    baseline = [28, 39, 16, 47, 32, 63, 67, 54, 43, 62, 60, 58, 66, 53, 48, 51]
+    days = [date(2026, 11, 1) + timedelta(days=i) for i in range(len(baseline) + 1)]
+    series = dict(zip(days, [*baseline, 15]))
+    assert outlier_flags(series, OutlierRule(min_share=0.12))[days[-1]] is False
+    assert _last_flag(baseline, 15, "hrv_ms") is True
+    assert _last_flag([65, 66, 67, 68, 69, 70] * 3, 14.9, "hrv_ms") is True
+
+
+def test_outliers_need_14_values_of_history():
+    assert _last_flag([70] * 13, 95, "resting_hr_bpm") is None
+    assert _last_flag([70] * 14, 95, "resting_hr_bpm") is True
 
 
 def test_weeks_run_monday_to_sunday(run):

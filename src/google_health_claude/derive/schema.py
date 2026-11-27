@@ -270,8 +270,10 @@ WEEKLY = Table(
 
 QUALITY = Table(
     "quality",
-    "Per-day data checks. Outliers: more than 3 MAD from the median of the 28 days before "
-    "(at least 7 values needed; MAD floored at 1% of the median).",
+    "Per-day data checks. Outliers: more than 3 spreads from the median of the 28 days before "
+    "(at least 14 values needed, else empty), where spread = 1.4826 x MAD, but at least "
+    "3 bpm for resting heart rate, 12% of the median for HRV and 1 point for SpO2. HRV below "
+    "50% of that median is also flagged (sensor dropouts).",
     _cols(
         ("date", "TEXT", "date"),
         ("missing_metrics", "TEXT", "expected data types not stored for the day, ';'-separated"),
