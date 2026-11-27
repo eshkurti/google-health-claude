@@ -95,7 +95,6 @@ strict = true
 [[tool.mypy.overrides]]
 module = [
     "google_health_claude.cli",
-    "google_health_claude.probe",
     "google_health_claude.probe_more",
 ]
 disallow_any_generics = false

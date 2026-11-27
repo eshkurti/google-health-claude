@@ -174,7 +174,7 @@ def main(argv: list[str] | None = None) -> int:  # noqa: C901 - split in refacto
         client = HealthClient(load_credentials(args.client_secret, args.token_file))
 
         if args.command == "probe":
-            from .probe import probe
+            from .devtools.probe import probe
 
             day = args.date or today() - timedelta(days=1)
             return 1 if probe(client, day, args.save_samples) else 0
