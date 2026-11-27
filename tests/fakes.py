@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from google_health_claude.client import HealthApiError, RawReply
+from google_health_claude.api.client import HealthApiError, RawReply
 
 
 class FakeResponse:

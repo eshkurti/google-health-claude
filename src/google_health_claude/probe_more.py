@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from .client import HealthApiError
+from .api.client import HealthApiError
 from .config import TIMEZONE
 from .datatypes import _camel, _snake
 from .records import parse_time

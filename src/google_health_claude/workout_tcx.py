@@ -31,7 +31,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-from .client import HealthApiError
+from .api.client import HealthApiError
 from .records import exercise_id, tcx_eligible
 from .store import day_path, load_json, write_bytes_if_changed, write_if_changed
 from .tcx import summarize_tcx

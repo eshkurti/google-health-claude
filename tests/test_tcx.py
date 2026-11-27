@@ -6,9 +6,9 @@ import json
 import pytest
 from fakes import FakeResponse, FakeSession
 
+from google_health_claude.api.client import HealthClient
 from google_health_claude.api.credentials import Credentials
 from google_health_claude.cli import build_parser
-from google_health_claude.client import HealthClient
 from google_health_claude.derive.points import read_points
 from google_health_claude.probe import probe_tcx
 from google_health_claude.records import exercise_id

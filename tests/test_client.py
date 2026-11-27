@@ -4,8 +4,8 @@ import pytest
 import requests
 from fakes import FakeResponse, FakeSession, NotJsonResponse
 
+from google_health_claude.api.client import AuthError, HealthApiError, HealthClient
 from google_health_claude.api.credentials import Credentials
-from google_health_claude.client import AuthError, HealthApiError, HealthClient
 
 CREDS = Credentials("id", "secret", "refresh")
 TOKEN = FakeResponse(200, {"access_token": "tok", "expires_in": 3599})
@@ -82,6 +82,24 @@ def test_refresh_reply_without_access_token_raises_auth_error():
     assert all(
         call.get("headers", {}).get("Authorization") != "Bearer None" for call in session.calls
     )
+
+
+def test_refresh_reply_that_is_not_json_raises_auth_error():
+    session = FakeSession([NotJsonResponse()])
+    c = HealthClient(CREDS, session=session, sleep=lambda _: None)
+    with pytest.raises(AuthError, match="no access token"):
+        c.list_data_points("steps")
+    assert len(session.calls) == 1
+
+
+@pytest.mark.parametrize("expires_in", ["soon", None, [3599]])
+def test_refresh_reply_with_odd_expires_in_still_works(expires_in):
+    c, session = client([])
+    session._responses = [
+        FakeResponse(200, {"access_token": "tok", "expires_in": expires_in}),
+        FakeResponse(200, {"dataPoints": [{"name": "p/1"}]}),
+    ]
+    assert c.list_data_points("steps") == [{"name": "p/1"}]
 
 
 def test_daily_rollup_request_body():

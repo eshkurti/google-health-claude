@@ -17,7 +17,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
-from .client import HealthApiError
+from .api.client import HealthApiError
 from .datatypes import LIST_SPECS, ROLLUP_SPECS
 from .fetch import list_for_day
 from .tcx import TARGETS, Workout, load_workouts, pick_workouts, summarize_tcx

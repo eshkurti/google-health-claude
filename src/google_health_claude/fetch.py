@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from .client import HealthApiError
+from .api.client import HealthApiError
 from .config import TIMEZONE
 from .datatypes import LIST_SPECS, ROLLUP_SPECS, WEIGHT_DAYS, WEIGHT_SPEC, ListSpec, _camel
 from .records import civil_date, parse_time

@@ -1,4 +1,9 @@
-"""Minimal Google Health API client: token refresh, retries, pagination."""
+"""Minimal Google Health API client: token refresh, retries, pagination.
+
+``HealthApi`` is the interface the rest of the package codes against (fetch,
+the TCX download and the probes); ``HealthClient`` is its one implementation,
+and the tests use fakes with the same methods.
+"""
 
 from __future__ import annotations
 
@@ -6,13 +11,13 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
-from typing import Any
+from typing import Any, Protocol
 from urllib.parse import quote
 
 import requests
 
-from .api.credentials import Credentials
-from .config import API_BASE, TOKEN_URL
+from ..config import API_BASE, TOKEN_URL
+from .credentials import Credentials
 
 
 class AuthError(RuntimeError):
@@ -56,18 +61,63 @@ def _check_shape(body: dict[str, Any], items_key: str, url: str) -> None:
         raise HealthApiError(0, f"unexpected response keys {other}, expected '{items_key}'", url)
 
 
-def _error_message(resp: Any) -> str:
+def _error_message(resp: requests.Response) -> str:
     try:
         return _short(resp.json()["error"]["message"])
     except Exception:  # noqa: BLE001 - any parsing problem falls back to raw text
         return _short(getattr(resp, "text", "") or "")
 
 
+def _json_or_none(resp: requests.Response) -> object:
+    try:
+        body: object = resp.json()
+    except ValueError:
+        return None
+    return body
+
+
+def _seconds(value: object, default: float) -> float:
+    """A lifetime in seconds from a token reply; the default if it is not a number."""
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+        return default
+    try:
+        return float(value)
+    except ValueError:
+        return default
+
+
+class HealthApi(Protocol):
+    """What the rest of the package needs from the API (HealthClient implements it)."""
+
+    refresh_token_expires_in: object
+    last_status: int | None
+
+    def identity(self) -> dict[str, Any]: ...
+
+    def list_page(
+        self,
+        data_type: str,
+        flt: str | None = None,
+        page_size: int | None = None,
+        page_token: str | None = None,
+    ) -> dict[str, Any]: ...
+
+    def list_data_points(
+        self, data_type: str, flt: str | None = None, page_size: int | None = None
+    ) -> list[dict[str, Any]]: ...
+
+    def export_exercise_tcx(self, exercise_id: str, partial_data: bool = False) -> RawReply: ...
+
+    def daily_rollup(
+        self, data_type: str, start: date, end_exclusive: date
+    ) -> list[dict[str, Any]]: ...
+
+
 class HealthClient:
     def __init__(
         self,
         creds: Credentials,
-        session: Any = None,
+        session: requests.Session | None = None,
         sleep: Callable[[float], None] = time.sleep,
         max_retries: int = 4,
     ):
@@ -77,8 +127,8 @@ class HealthClient:
         self._max_retries = max_retries
         self._access_token: str | None = None
         self._expires_at = 0.0
-        # Reported by the token endpoint; logged so we learn the real lifetime.
-        self.refresh_token_expires_in: Any = None
+        # Reported by the token endpoint; printed as given, never interpreted.
+        self.refresh_token_expires_in: object = None
         # HTTP status of the last API reply (for probes that report it).
         self.last_status: int | None = None
 
@@ -102,8 +152,10 @@ class HealthClient:
                 "Run `python -m google_health_claude auth` again and update the "
                 "GOOGLE_REFRESH_TOKEN secret."
             )
-        body = resp.json()
-        token = body.get("access_token") if isinstance(body, dict) else None
+        body = _json_or_none(resp)
+        if not isinstance(body, dict):
+            body = {}
+        token = body.get("access_token")
         if not isinstance(token, str) or not token:
             # Never send "Bearer None": stop here, without echoing the reply body.
             raise AuthError(
@@ -111,7 +163,7 @@ class HealthClient:
                 "Run `python -m google_health_claude auth` again if this persists."
             )
         self._access_token = token
-        self._expires_at = time.time() + float(body.get("expires_in", 3600)) - 60
+        self._expires_at = time.time() + _seconds(body.get("expires_in"), 3600) - 60
         self.refresh_token_expires_in = body.get("refresh_token_expires_in")
         return token
 
@@ -122,7 +174,9 @@ class HealthClient:
 
     # -- HTTP -----------------------------------------------------------
 
-    def _send(self, method: str, url: str, accept: str = "application/json", **kwargs: Any) -> Any:
+    def _send(
+        self, method: str, url: str, accept: str = "application/json", **kwargs: Any
+    ) -> requests.Response:
         """Send with auth, one refresh on 401, and backoff on 429/5xx/network errors.
 
         Returns the final response whatever its status; raises only when no
@@ -158,7 +212,7 @@ class HealthClient:
         if not resp.content:
             return {}
         try:
-            body = resp.json()
+            body: object = resp.json()
         except ValueError as err:
             raise HealthApiError(resp.status_code, "response is not valid JSON", url) from err
         if not isinstance(body, dict):
