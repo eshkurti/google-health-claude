@@ -11,7 +11,8 @@ from fakes import FakeClient
 from google_health_claude import cli
 from google_health_claude.client import HealthApiError, RawReply
 from google_health_claude.fetch import fetch_range
-from google_health_claude.workout_tcx import eligible, gzip_bytes
+from google_health_claude.records import tcx_eligible
+from google_health_claude.workout_tcx import gzip_bytes
 
 DAY = date(2026, 1, 8)
 # Invented placeholder coordinates (open ocean); tests check they are never logged.
@@ -218,13 +219,13 @@ def tcx_file(root, n):
 
 
 def test_eligibility_rules():
-    assert eligible(workout(1))  # GPS run
-    assert eligible(workout(1, "WALKING"))  # walk started on the band
-    assert eligible(workout(1, "STRENGTH_TRAINING", method="PASSIVELY_MEASURED"))
-    assert not eligible(workout(1, "WALKING", method="PASSIVELY_MEASURED"))
-    assert not eligible(workout(1, platform="HEALTH_CONNECT"))
-    assert not eligible(workout(1, method="UNKNOWN"))
-    assert not eligible({"name": "x"})
+    assert tcx_eligible(workout(1))  # GPS run
+    assert tcx_eligible(workout(1, "WALKING"))  # walk started on the band
+    assert tcx_eligible(workout(1, "STRENGTH_TRAINING", method="PASSIVELY_MEASURED"))
+    assert not tcx_eligible(workout(1, "WALKING", method="PASSIVELY_MEASURED"))
+    assert not tcx_eligible(workout(1, platform="HEALTH_CONNECT"))
+    assert not tcx_eligible(workout(1, method="UNKNOWN"))
+    assert not tcx_eligible({"name": "x"})
 
 
 def test_tcx_download_skip_rules_and_storage(tmp_path):

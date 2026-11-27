@@ -11,7 +11,8 @@ from google_health_claude.client import HealthClient
 from google_health_claude.credentials import Credentials
 from google_health_claude.derive.points import read_points
 from google_health_claude.probe import probe_tcx
-from google_health_claude.tcx import exercise_id, load_workouts, pick_workouts, summarize_tcx
+from google_health_claude.records import exercise_id
+from google_health_claude.tcx import load_workouts, pick_workouts, summarize_tcx
 
 # Distinctive invented coordinates: the tests assert they are never printed.
 LAT, LON = "12.3456789", "98.7654321"

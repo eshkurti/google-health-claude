@@ -17,7 +17,7 @@ from typing import Any, overload
 from zoneinfo import ZoneInfo
 
 from ..config import TIMEZONE
-from ..tcx import parse_time
+from ..records import parse_time
 
 TZ = ZoneInfo(TIMEZONE)
 

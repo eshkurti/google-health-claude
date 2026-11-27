@@ -20,8 +20,7 @@ from pathlib import Path
 from statistics import median
 from typing import Any
 
-from ..tcx import exercise_id
-from ..workout_tcx import eligible
+from ..records import exercise_id, tcx_eligible
 from .points import (
     Point,
     gps_segments,
@@ -71,7 +70,7 @@ class Session:
 
     @property
     def needs_tcx(self) -> bool:
-        return any(eligible(m.rec) for m in self.members)
+        return any(tcx_eligible(m.rec) for m in self.members)
 
 
 @dataclass

@@ -4,7 +4,8 @@ from datetime import date
 from fakes import FakeClient
 
 from google_health_claude.client import HealthApiError
-from google_health_claude.fetch import chunks, civil_date, fetch_range
+from google_health_claude.fetch import chunks, fetch_range
+from google_health_claude.records import civil_date
 
 
 def rollup_point(day, value):

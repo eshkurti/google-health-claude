@@ -25,7 +25,8 @@ from zoneinfo import ZoneInfo
 from .client import HealthApiError
 from .config import TIMEZONE
 from .datatypes import _camel, _snake
-from .tcx import load_workouts, parse_time, pick_workouts
+from .records import parse_time
+from .tcx import load_workouts, pick_workouts
 
 # The API refusing a type is a finding, not a crash.
 EXPECTED_REFUSALS = (400, 403, 404)

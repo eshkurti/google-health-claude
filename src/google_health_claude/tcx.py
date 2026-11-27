@@ -16,6 +16,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from .records import exercise_id, parse_time
+
 # Field names below come from the schema notes written after the first real
 # fetch (dataSource.platform / recordingMethod, exercise.exerciseType).
 Matcher = Callable[[dict[str, Any]], bool]
@@ -74,31 +76,6 @@ class Workout:
     file_date: str
     start: str
     end: str = ""
-
-
-def exercise_id(name: str) -> str:
-    """Last path segment of a data point name (``users/.../dataPoints/<id>``)."""
-    return name.rstrip("/").rsplit("/", 1)[-1]
-
-
-def parse_time(text: Any) -> datetime | None:
-    if not isinstance(text, str) or not text:
-        return None
-    text = text.strip()
-    if text.endswith("Z"):
-        text = text[:-1] + "+00:00"
-    try:
-        return datetime.fromisoformat(text)
-    except ValueError:
-        # Python 3.10 only accepts 3 or 6 fractional digits; drop the fraction.
-        head, dot, rest = text.partition(".")
-        if not dot:
-            return None
-        tz = next((rest[i:] for i, ch in enumerate(rest) if ch in "+-"), "")
-        try:
-            return datetime.fromisoformat(head + tz)
-        except ValueError:
-            return None
 
 
 def workouts_dir(data_dir: Path) -> Path:

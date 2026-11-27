@@ -15,7 +15,7 @@ from pathlib import Path
 from statistics import median
 from typing import Any
 
-from ..tcx import exercise_id
+from ..records import exercise_id
 from .values import (
     dig,
     local_date,

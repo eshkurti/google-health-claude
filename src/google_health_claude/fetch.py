@@ -26,8 +26,8 @@ from zoneinfo import ZoneInfo
 from .client import HealthApiError
 from .config import TIMEZONE
 from .datatypes import LIST_SPECS, ROLLUP_SPECS, WEIGHT_DAYS, WEIGHT_SPEC, ListSpec, _camel
+from .records import civil_date, parse_time
 from .store import day_path, load_json, merge_items, write_if_changed
-from .tcx import parse_time
 from .workout_tcx import TcxReport, export_tcx_for_days
 
 Log = Callable[[str], None]
@@ -48,14 +48,6 @@ class FetchReport:
     files_changed: int = 0
     errors: dict[str, str] = field(default_factory=dict)
     tcx: TcxReport = field(default_factory=TcxReport)
-
-
-def civil_date(civil_date_time: Any) -> date | None:
-    try:
-        d = civil_date_time["date"]
-        return date(int(d["year"]), int(d["month"]), int(d["day"]))
-    except (KeyError, TypeError, ValueError):
-        return None
 
 
 def days_between(start: date, end: date) -> list[date]:

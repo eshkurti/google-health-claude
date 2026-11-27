@@ -32,8 +32,9 @@ from pathlib import Path
 from typing import Any
 
 from .client import HealthApiError
+from .records import exercise_id, tcx_eligible
 from .store import day_path, load_json, write_bytes_if_changed, write_if_changed
-from .tcx import exercise_id, summarize_tcx
+from .tcx import summarize_tcx
 
 INDEX_NAME = "_end_times.json"
 # Exercise ids become file names: refuse anything that could leave the folder.
@@ -57,17 +58,6 @@ class TcxReport:
             "failed": self.failed,
             "failures": sorted(self.failures, key=lambda f: (f["date"], f["exercise_id"])),
         }
-
-
-def eligible(workout: dict[str, Any]) -> bool:
-    source = workout.get("dataSource") or {}
-    exercise = workout.get("exercise") or {}
-    if source.get("platform") != "FITBIT":
-        return False
-    method = source.get("recordingMethod")
-    return method == "ACTIVELY_MEASURED" or (
-        method == "PASSIVELY_MEASURED" and exercise.get("exerciseType") != "WALKING"
-    )
 
 
 def gzip_bytes(content: bytes) -> bytes:
@@ -99,7 +89,7 @@ def export_tcx_for_days(  # noqa: C901 - split in refactor session
         index = dict(old_index)
 
         for workout in stored.get("workouts", []):
-            if not isinstance(workout, dict) or not eligible(workout):
+            if not isinstance(workout, dict) or not tcx_eligible(workout):
                 continue
             exercise = workout.get("exercise") or {}
             kind = str(exercise.get("exerciseType") or "unknown type")

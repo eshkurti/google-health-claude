@@ -21,8 +21,9 @@ from google_health_claude.demo.route import ANCHOR_LAT, ANCHOR_LON
 from google_health_claude.derive import derive
 from google_health_claude.derive.points import read_points
 from google_health_claude.derive.values import TZ, timestamp
+from google_health_claude.records import tcx_eligible
 from google_health_claude.store import load_json
-from google_health_claude.workout_tcx import INDEX_NAME, eligible, gzip_bytes
+from google_health_claude.workout_tcx import INDEX_NAME, gzip_bytes
 
 SEED = 5  # not the golden seed: these checks must hold for any seed
 
@@ -114,7 +115,7 @@ def test_records_sit_in_the_files_fetch_puts_them_in(demo):
         for ex_id, path in files.items():
             content = path.read_bytes()
             assert gzip_bytes(gzip.decompress(content)) == content
-            assert eligible(workouts[ex_id])
+            assert tcx_eligible(workouts[ex_id])
     meta = load_json(demo["raw"] / "_meta.json")
     assert set(meta) == {"last_fetch_utc", "window", "api_errors", "incomplete_days", "tcx"}
 
