@@ -1,0 +1,21 @@
+{
+  "date": "2026-08-20",
+  "metrics": {
+    "weight": [
+      {
+        "dataSource": {
+          "platform": "FITBIT",
+          "recordingMethod": "MANUAL"
+        },
+        "name": "users/0000/dataTypes/weight/dataPoints/w-20260820-0",
+        "weight": {
+          "sampleTime": {
+            "physicalTime": "2026-08-20T04:40:00Z",
+            "utcOffset": "7200s"
+          },
+          "weightGrams": 79444
+        }
+      }
+    ]
+  }
+}

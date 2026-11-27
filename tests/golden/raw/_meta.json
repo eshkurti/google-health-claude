@@ -1,0 +1,16 @@
+{
+  "api_errors": {},
+  "incomplete_days": [],
+  "last_fetch_utc": "2026-10-26T04:10:00Z",
+  "tcx": {
+    "empty": 1,
+    "failed": 0,
+    "failures": [],
+    "fetched": 1,
+    "skipped": 0
+  },
+  "window": [
+    "2026-10-24",
+    "2026-10-26"
+  ]
+}

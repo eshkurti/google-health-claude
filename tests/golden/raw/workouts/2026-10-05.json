@@ -1,0 +1,37 @@
+{
+  "date": "2026-10-05",
+  "workouts": [
+    {
+      "dataSource": {
+        "platform": "FITBIT",
+        "recordingMethod": "PASSIVELY_MEASURED"
+      },
+      "exercise": {
+        "activeDuration": "1908s",
+        "displayName": "Walking",
+        "exerciseType": "WALKING",
+        "interval": {
+          "endTime": "2026-10-05T11:08:48Z",
+          "endUtcOffset": "7200s",
+          "startTime": "2026-10-05T10:37:00Z",
+          "startUtcOffset": "7200s"
+        },
+        "metricsSummary": {
+          "activeZoneMinutes": "0",
+          "averageHeartRateBeatsPerMinute": "99",
+          "averagePaceSecondsPerMeter": 0.7022451232977549,
+          "caloriesKcal": 127,
+          "distanceMillimeters": 2717000,
+          "heartRateZoneDurations": {
+            "lightTime": "1908s",
+            "moderateTime": "0s",
+            "peakTime": "0s",
+            "vigorousTime": "0s"
+          },
+          "steps": "3418"
+        }
+      },
+      "name": "users/0000/dataTypes/exercise/dataPoints/walk-20261005"
+    }
+  ]
+}

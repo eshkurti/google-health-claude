@@ -1,0 +1,222 @@
+{
+  "date": "2026-10-26",
+  "metrics": {
+    "active-energy-burned": {
+      "activeEnergyBurned": {
+        "kcalSum": 2.2
+      },
+      "civilEndTime": {
+        "date": {
+          "day": 27,
+          "month": 10,
+          "year": 2026
+        }
+      },
+      "civilStartTime": {
+        "date": {
+          "day": 26,
+          "month": 10,
+          "year": 2026
+        }
+      }
+    },
+    "active-minutes": {
+      "activeMinutes": {
+        "activeMinutesRollupByActivityLevel": []
+      },
+      "civilEndTime": {
+        "date": {
+          "day": 27,
+          "month": 10,
+          "year": 2026
+        }
+      },
+      "civilStartTime": {
+        "date": {
+          "day": 26,
+          "month": 10,
+          "year": 2026
+        }
+      }
+    },
+    "active-zone-minutes": {
+      "activeZoneMinutes": {
+        "sumInCardioHeartZone": "0",
+        "sumInFatBurnHeartZone": "0",
+        "sumInPeakHeartZone": "0"
+      },
+      "civilEndTime": {
+        "date": {
+          "day": 27,
+          "month": 10,
+          "year": 2026
+        }
+      },
+      "civilStartTime": {
+        "date": {
+          "day": 26,
+          "month": 10,
+          "year": 2026
+        }
+      }
+    },
+    "daily-heart-rate-zones": [
+      {
+        "dailyHeartRateZones": {
+          "date": {
+            "day": 26,
+            "month": 10,
+            "year": 2026
+          },
+          "heartRateZones": [
+            {
+              "heartRateZoneType": "LIGHT",
+              "maxBeatsPerMinute": "125",
+              "minBeatsPerMinute": "30"
+            },
+            {
+              "heartRateZoneType": "MODERATE",
+              "maxBeatsPerMinute": "148",
+              "minBeatsPerMinute": "126"
+            },
+            {
+              "heartRateZoneType": "VIGOROUS",
+              "maxBeatsPerMinute": "172",
+              "minBeatsPerMinute": "149"
+            },
+            {
+              "heartRateZoneType": "PEAK",
+              "maxBeatsPerMinute": "220",
+              "minBeatsPerMinute": "173"
+            }
+          ]
+        },
+        "dataSource": {
+          "platform": "FITBIT",
+          "recordingMethod": "DERIVED"
+        }
+      }
+    ],
+    "distance": {
+      "civilEndTime": {
+        "date": {
+          "day": 27,
+          "month": 10,
+          "year": 2026
+        }
+      },
+      "civilStartTime": {
+        "date": {
+          "day": 26,
+          "month": 10,
+          "year": 2026
+        }
+      },
+      "distance": {
+        "millimetersSum": "53280"
+      }
+    },
+    "heart-rate": {
+      "civilEndTime": {
+        "date": {
+          "day": 27,
+          "month": 10,
+          "year": 2026
+        }
+      },
+      "civilStartTime": {
+        "date": {
+          "day": 26,
+          "month": 10,
+          "year": 2026
+        }
+      },
+      "heartRate": {
+        "beatsPerMinuteAvg": 56.2,
+        "beatsPerMinuteMax": 73,
+        "beatsPerMinuteMin": 51
+      }
+    },
+    "sedentary-period": {
+      "civilEndTime": {
+        "date": {
+          "day": 27,
+          "month": 10,
+          "year": 2026
+        }
+      },
+      "civilStartTime": {
+        "date": {
+          "day": 26,
+          "month": 10,
+          "year": 2026
+        }
+      },
+      "sedentaryPeriod": {
+        "durationSum": "736s"
+      }
+    },
+    "steps": {
+      "civilEndTime": {
+        "date": {
+          "day": 27,
+          "month": 10,
+          "year": 2026
+        }
+      },
+      "civilStartTime": {
+        "date": {
+          "day": 26,
+          "month": 10,
+          "year": 2026
+        }
+      },
+      "steps": {
+        "countSum": "74"
+      }
+    },
+    "time-in-heart-rate-zone": {
+      "civilEndTime": {
+        "date": {
+          "day": 27,
+          "month": 10,
+          "year": 2026
+        }
+      },
+      "civilStartTime": {
+        "date": {
+          "day": 26,
+          "month": 10,
+          "year": 2026
+        }
+      },
+      "timeInHeartRateZone": {
+        "timeInHeartRateZones": [
+          {
+            "duration": "18600s",
+            "heartRateZone": "LIGHT"
+          }
+        ]
+      }
+    },
+    "total-calories": {
+      "civilEndTime": {
+        "date": {
+          "day": 27,
+          "month": 10,
+          "year": 2026
+        }
+      },
+      "civilStartTime": {
+        "date": {
+          "day": 26,
+          "month": 10,
+          "year": 2026
+        }
+      },
+      "totalCalories": {
+        "kcalSum": 370.2
+      }
+    }
+  }
+}

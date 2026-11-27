@@ -1,0 +1,4 @@
+record,target_km,workout_id,date,distance_km,duration_s,pace_min_km
+best_1km_split,1,run-20261015,2026-10-15,1,335,5.584
+best_run_5k,5,run-20261015,2026-10-15,6.441,2332,6.034
+best_run_10k,10,run-20261025,2026-10-25,13.124,5523,7.014

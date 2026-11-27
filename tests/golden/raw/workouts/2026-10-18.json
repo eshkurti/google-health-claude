@@ -1,0 +1,195 @@
+{
+  "date": "2026-10-18",
+  "workouts": [
+    {
+      "dataSource": {
+        "platform": "FITBIT",
+        "recordingMethod": "ACTIVELY_MEASURED"
+      },
+      "exercise": {
+        "activeDuration": "4693s",
+        "displayName": "Running",
+        "exerciseType": "RUNNING",
+        "interval": {
+          "endTime": "2026-10-18T08:18:13Z",
+          "endUtcOffset": "7200s",
+          "startTime": "2026-10-18T07:00:00Z",
+          "startUtcOffset": "7200s"
+        },
+        "metricsSummary": {
+          "activeZoneMinutes": "80",
+          "averageHeartRateBeatsPerMinute": "141",
+          "averagePaceSecondsPerMeter": 0.4277368138027835,
+          "caloriesKcal": 829,
+          "distanceMillimeters": 10971700,
+          "elevationGainMillimeters": 71981,
+          "heartRateZoneDurations": {
+            "lightTime": "141s",
+            "moderateTime": "4250s",
+            "peakTime": "0s",
+            "vigorousTime": "303s"
+          },
+          "steps": "12820"
+        },
+        "splits": [
+          {
+            "activeDuration": "422s",
+            "endTime": "2026-10-18T07:07:02Z",
+            "endUtcOffset": "7200s",
+            "metricsSummary": {
+              "averagePaceSecondsPerMeter": 0.42119972053099114,
+              "distanceMillimeters": 1001900
+            },
+            "splitType": "DISTANCE",
+            "startTime": "2026-10-18T07:00:00Z",
+            "startUtcOffset": "7200s"
+          },
+          {
+            "activeDuration": "421s",
+            "endTime": "2026-10-18T07:14:03Z",
+            "endUtcOffset": "7200s",
+            "metricsSummary": {
+              "averagePaceSecondsPerMeter": 0.42099999999999993,
+              "distanceMillimeters": 1000000
+            },
+            "splitType": "DISTANCE",
+            "startTime": "2026-10-18T07:07:02Z",
+            "startUtcOffset": "7200s"
+          },
+          {
+            "activeDuration": "429s",
+            "endTime": "2026-10-18T07:21:12Z",
+            "endUtcOffset": "7200s",
+            "metricsSummary": {
+              "averagePaceSecondsPerMeter": 0.4290858171634328,
+              "distanceMillimeters": 999800
+            },
+            "splitType": "DISTANCE",
+            "startTime": "2026-10-18T07:14:03Z",
+            "startUtcOffset": "7200s"
+          },
+          {
+            "activeDuration": "463s",
+            "endTime": "2026-10-18T07:28:55Z",
+            "endUtcOffset": "7200s",
+            "metricsSummary": {
+              "averagePaceSecondsPerMeter": 0.46364910875225296,
+              "distanceMillimeters": 998600
+            },
+            "splitType": "DISTANCE",
+            "startTime": "2026-10-18T07:21:12Z",
+            "startUtcOffset": "7200s"
+          },
+          {
+            "activeDuration": "391s",
+            "endTime": "2026-10-18T07:35:26Z",
+            "endUtcOffset": "7200s",
+            "metricsSummary": {
+              "averagePaceSecondsPerMeter": 0.39068745003996797,
+              "distanceMillimeters": 1000800
+            },
+            "splitType": "DISTANCE",
+            "startTime": "2026-10-18T07:28:55Z",
+            "startUtcOffset": "7200s"
+          },
+          {
+            "activeDuration": "417s",
+            "endTime": "2026-10-18T07:42:23Z",
+            "endUtcOffset": "7200s",
+            "metricsSummary": {
+              "averagePaceSecondsPerMeter": 0.41712513754126246,
+              "distanceMillimeters": 999700
+            },
+            "splitType": "DISTANCE",
+            "startTime": "2026-10-18T07:35:26Z",
+            "startUtcOffset": "7200s"
+          },
+          {
+            "activeDuration": "433s",
+            "endTime": "2026-10-18T07:49:36Z",
+            "endUtcOffset": "7200s",
+            "metricsSummary": {
+              "averagePaceSecondsPerMeter": 0.4333466773418736,
+              "distanceMillimeters": 999200
+            },
+            "splitType": "DISTANCE",
+            "startTime": "2026-10-18T07:42:23Z",
+            "startUtcOffset": "7200s"
+          },
+          {
+            "activeDuration": "433s",
+            "endTime": "2026-10-18T07:56:49Z",
+            "endUtcOffset": "7200s",
+            "metricsSummary": {
+              "averagePaceSecondsPerMeter": 0.4327403557865279,
+              "distanceMillimeters": 1000600
+            },
+            "splitType": "DISTANCE",
+            "startTime": "2026-10-18T07:49:36Z",
+            "startUtcOffset": "7200s"
+          },
+          {
+            "activeDuration": "425s",
+            "endTime": "2026-10-18T08:03:54Z",
+            "endUtcOffset": "7200s",
+            "metricsSummary": {
+              "averagePaceSecondsPerMeter": 0.4250425042504252,
+              "distanceMillimeters": 999900
+            },
+            "splitType": "DISTANCE",
+            "startTime": "2026-10-18T07:56:49Z",
+            "startUtcOffset": "7200s"
+          },
+          {
+            "activeDuration": "455s",
+            "endTime": "2026-10-18T08:11:29Z",
+            "endUtcOffset": "7200s",
+            "metricsSummary": {
+              "averagePaceSecondsPerMeter": 0.45522761380690346,
+              "distanceMillimeters": 999500
+            },
+            "splitType": "DISTANCE",
+            "startTime": "2026-10-18T08:03:54Z",
+            "startUtcOffset": "7200s"
+          },
+          {
+            "activeDuration": "404s",
+            "endTime": "2026-10-18T08:18:13Z",
+            "endUtcOffset": "7200s",
+            "metricsSummary": {
+              "averagePaceSecondsPerMeter": 0.42105263157894735,
+              "distanceMillimeters": 959500
+            },
+            "splitType": "DISTANCE",
+            "startTime": "2026-10-18T08:11:29Z",
+            "startUtcOffset": "7200s"
+          }
+        ]
+      },
+      "name": "users/0000/dataTypes/exercise/dataPoints/run-20261018"
+    },
+    {
+      "dataSource": {
+        "platform": "HEALTH_CONNECT",
+        "recordingMethod": "ACTIVELY_MEASURED"
+      },
+      "exercise": {
+        "activeDuration": "4691s",
+        "displayName": "Running",
+        "exerciseType": "RUNNING",
+        "interval": {
+          "endTime": "2026-10-18T08:18:21Z",
+          "endUtcOffset": "7200s",
+          "startTime": "2026-10-18T07:00:10Z",
+          "startUtcOffset": "7200s"
+        },
+        "metricsSummary": {
+          "averagePaceSecondsPerMeter": 0.4133185310495524,
+          "distanceMillimeters": 11349600,
+          "steps": "12750"
+        }
+      },
+      "name": "users/0000/dataTypes/exercise/dataPoints/hc-run-20261018"
+    }
+  ]
+}

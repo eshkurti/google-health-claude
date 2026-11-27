@@ -1,0 +1,349 @@
+{
+  "date": "2026-10-17",
+  "metrics": {
+    "active-energy-burned": {
+      "activeEnergyBurned": {
+        "kcalSum": 778.9
+      },
+      "civilEndTime": {
+        "date": {
+          "day": 18,
+          "month": 10,
+          "year": 2026
+        }
+      },
+      "civilStartTime": {
+        "date": {
+          "day": 17,
+          "month": 10,
+          "year": 2026
+        }
+      }
+    },
+    "active-minutes": {
+      "activeMinutes": {
+        "activeMinutesRollupByActivityLevel": [
+          {
+            "activeMinutesSum": "231",
+            "activityLevel": "LIGHT"
+          },
+          {
+            "activeMinutesSum": "29",
+            "activityLevel": "MODERATE"
+          },
+          {
+            "activeMinutesSum": "4",
+            "activityLevel": "VIGOROUS"
+          }
+        ]
+      },
+      "civilEndTime": {
+        "date": {
+          "day": 18,
+          "month": 10,
+          "year": 2026
+        }
+      },
+      "civilStartTime": {
+        "date": {
+          "day": 17,
+          "month": 10,
+          "year": 2026
+        }
+      }
+    },
+    "active-zone-minutes": {
+      "activeZoneMinutes": {
+        "sumInCardioHeartZone": "8",
+        "sumInFatBurnHeartZone": "29",
+        "sumInPeakHeartZone": "0"
+      },
+      "civilEndTime": {
+        "date": {
+          "day": 18,
+          "month": 10,
+          "year": 2026
+        }
+      },
+      "civilStartTime": {
+        "date": {
+          "day": 17,
+          "month": 10,
+          "year": 2026
+        }
+      }
+    },
+    "daily-heart-rate-variability": [
+      {
+        "dailyHeartRateVariability": {
+          "averageHeartRateVariabilityMilliseconds": 47.8,
+          "date": {
+            "day": 17,
+            "month": 10,
+            "year": 2026
+          },
+          "deepSleepRootMeanSquareOfSuccessiveDifferencesMilliseconds": 51.9,
+          "entropy": 2.5,
+          "nonRemHeartRateBeatsPerMinute": "60"
+        },
+        "dataSource": {
+          "platform": "FITBIT",
+          "recordingMethod": "DERIVED"
+        }
+      }
+    ],
+    "daily-heart-rate-zones": [
+      {
+        "dailyHeartRateZones": {
+          "date": {
+            "day": 17,
+            "month": 10,
+            "year": 2026
+          },
+          "heartRateZones": [
+            {
+              "heartRateZoneType": "LIGHT",
+              "maxBeatsPerMinute": "125",
+              "minBeatsPerMinute": "30"
+            },
+            {
+              "heartRateZoneType": "MODERATE",
+              "maxBeatsPerMinute": "148",
+              "minBeatsPerMinute": "126"
+            },
+            {
+              "heartRateZoneType": "VIGOROUS",
+              "maxBeatsPerMinute": "172",
+              "minBeatsPerMinute": "149"
+            },
+            {
+              "heartRateZoneType": "PEAK",
+              "maxBeatsPerMinute": "220",
+              "minBeatsPerMinute": "173"
+            }
+          ]
+        },
+        "dataSource": {
+          "platform": "FITBIT",
+          "recordingMethod": "DERIVED"
+        }
+      }
+    ],
+    "daily-oxygen-saturation": [
+      {
+        "dailyOxygenSaturation": {
+          "averagePercentage": 95.9,
+          "date": {
+            "day": 17,
+            "month": 10,
+            "year": 2026
+          },
+          "lowerBoundPercentage": 93.7,
+          "standardDeviationPercentage": 1.34,
+          "upperBoundPercentage": 97.4
+        },
+        "dataSource": {
+          "platform": "FITBIT",
+          "recordingMethod": "DERIVED"
+        }
+      }
+    ],
+    "daily-respiratory-rate": [
+      {
+        "dailyRespiratoryRate": {
+          "breathsPerMinute": 15.3,
+          "date": {
+            "day": 17,
+            "month": 10,
+            "year": 2026
+          }
+        },
+        "dataSource": {
+          "platform": "FITBIT",
+          "recordingMethod": "DERIVED"
+        }
+      }
+    ],
+    "daily-resting-heart-rate": [
+      {
+        "dailyRestingHeartRate": {
+          "beatsPerMinute": "56",
+          "date": {
+            "day": 17,
+            "month": 10,
+            "year": 2026
+          }
+        },
+        "dataSource": {
+          "platform": "FITBIT",
+          "recordingMethod": "DERIVED"
+        }
+      }
+    ],
+    "daily-sleep-temperature-derivations": [
+      {
+        "dailySleepTemperatureDerivations": {
+          "baselineTemperatureCelsius": 33.66,
+          "date": {
+            "day": 17,
+            "month": 10,
+            "year": 2026
+          },
+          "nightlyTemperatureCelsius": 33.46,
+          "relativeNightlyStddev30dCelsius": 0.34
+        },
+        "dataSource": {
+          "platform": "FITBIT",
+          "recordingMethod": "DERIVED"
+        }
+      }
+    ],
+    "daily-vo2-max": [
+      {
+        "dailyVo2Max": {
+          "cardioFitnessLevel": "AVERAGE",
+          "date": {
+            "day": 17,
+            "month": 10,
+            "year": 2026
+          },
+          "vo2Max": 42.4,
+          "vo2MaxCovariance": 1.41
+        },
+        "dataSource": {
+          "platform": "FITBIT",
+          "recordingMethod": "DERIVED"
+        }
+      }
+    ],
+    "distance": {
+      "civilEndTime": {
+        "date": {
+          "day": 18,
+          "month": 10,
+          "year": 2026
+        }
+      },
+      "civilStartTime": {
+        "date": {
+          "day": 17,
+          "month": 10,
+          "year": 2026
+        }
+      },
+      "distance": {
+        "millimetersSum": "8109680"
+      }
+    },
+    "heart-rate": {
+      "civilEndTime": {
+        "date": {
+          "day": 18,
+          "month": 10,
+          "year": 2026
+        }
+      },
+      "civilStartTime": {
+        "date": {
+          "day": 17,
+          "month": 10,
+          "year": 2026
+        }
+      },
+      "heartRate": {
+        "beatsPerMinuteAvg": 68.8,
+        "beatsPerMinuteMax": 153,
+        "beatsPerMinuteMin": 49
+      }
+    },
+    "sedentary-period": {
+      "civilEndTime": {
+        "date": {
+          "day": 18,
+          "month": 10,
+          "year": 2026
+        }
+      },
+      "civilStartTime": {
+        "date": {
+          "day": 17,
+          "month": 10,
+          "year": 2026
+        }
+      },
+      "sedentaryPeriod": {
+        "durationSum": "35877s"
+      }
+    },
+    "steps": {
+      "civilEndTime": {
+        "date": {
+          "day": 18,
+          "month": 10,
+          "year": 2026
+        }
+      },
+      "civilStartTime": {
+        "date": {
+          "day": 17,
+          "month": 10,
+          "year": 2026
+        }
+      },
+      "steps": {
+        "countSum": "10163"
+      }
+    },
+    "time-in-heart-rate-zone": {
+      "civilEndTime": {
+        "date": {
+          "day": 18,
+          "month": 10,
+          "year": 2026
+        }
+      },
+      "civilStartTime": {
+        "date": {
+          "day": 17,
+          "month": 10,
+          "year": 2026
+        }
+      },
+      "timeInHeartRateZone": {
+        "timeInHeartRateZones": [
+          {
+            "duration": "82594s",
+            "heartRateZone": "LIGHT"
+          },
+          {
+            "duration": "1756s",
+            "heartRateZone": "MODERATE"
+          },
+          {
+            "duration": "250s",
+            "heartRateZone": "VIGOROUS"
+          }
+        ]
+      }
+    },
+    "total-calories": {
+      "civilEndTime": {
+        "date": {
+          "day": 18,
+          "month": 10,
+          "year": 2026
+        }
+      },
+      "civilStartTime": {
+        "date": {
+          "day": 17,
+          "month": 10,
+          "year": 2026
+        }
+      },
+      "totalCalories": {
+        "kcalSum": 2488.9
+      }
+    }
+  }
+}

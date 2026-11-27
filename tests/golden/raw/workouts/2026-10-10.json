@@ -1,0 +1,28 @@
+{
+  "date": "2026-10-10",
+  "workouts": [
+    {
+      "dataSource": {
+        "platform": "HEALTH_CONNECT",
+        "recordingMethod": "ACTIVELY_MEASURED"
+      },
+      "exercise": {
+        "activeDuration": "1870s",
+        "displayName": "Walking",
+        "exerciseType": "WALKING",
+        "interval": {
+          "endTime": "2026-10-10T08:31:10Z",
+          "endUtcOffset": "7200s",
+          "startTime": "2026-10-10T08:00:00Z",
+          "startUtcOffset": "7200s"
+        },
+        "metricsSummary": {
+          "averagePaceSecondsPerMeter": 0.7162829892366033,
+          "distanceMillimeters": 2610700,
+          "steps": "3416"
+        }
+      },
+      "name": "users/0000/dataTypes/exercise/dataPoints/hc-walk-20261010"
+    }
+  ]
+}

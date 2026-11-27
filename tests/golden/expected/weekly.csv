@@ -1,0 +1,5 @@
+week_start,week_end,runs,run_km,long_run_km,run_duration_min,run_avg_hr_bpm,run_hard_share,azm_points,sleep_h_avg,resting_hr_avg_bpm,hrv_avg_ms,hrv_avg_ex_outliers_ms,weight_kg_avg,days_with_data,is_complete
+2026-10-05,2026-10-11,3,20.276,9.106,136.417,145.022,0.297,198,7.024,57.857,42.386,42.386,78.266,7,true
+2026-10-12,2026-10-18,4,26.774,10.972,180.2,144.257,0.27,239,7.045,56.429,44.571,44.571,78.465,7,true
+2026-10-19,2026-10-25,2,17.01,13.124,118.633,141.448,0.073,140,7.586,57.833,41.467,45.52,78.524,6,false
+2026-10-26,2026-11-01,0,0,,0,,,0,,,,,,1,false

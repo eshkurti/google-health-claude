@@ -1,0 +1,36 @@
+{
+  "date": "2026-10-24",
+  "workouts": [
+    {
+      "dataSource": {
+        "platform": "FITBIT",
+        "recordingMethod": "PASSIVELY_MEASURED"
+      },
+      "exercise": {
+        "activeDuration": "2479s",
+        "displayName": "Strength_Training",
+        "exerciseType": "STRENGTH_TRAINING",
+        "interval": {
+          "endTime": "2026-10-24T08:41:19Z",
+          "endUtcOffset": "7200s",
+          "startTime": "2026-10-24T08:00:00Z",
+          "startUtcOffset": "7200s"
+        },
+        "metricsSummary": {
+          "activeZoneMinutes": "5",
+          "averageHeartRateBeatsPerMinute": "111",
+          "averagePaceSecondsPerMeter": 0.0,
+          "caloriesKcal": 186,
+          "distanceMillimeters": 0,
+          "heartRateZoneDurations": {
+            "lightTime": "2128s",
+            "moderateTime": "354s",
+            "peakTime": "0s",
+            "vigorousTime": "0s"
+          }
+        }
+      },
+      "name": "users/0000/dataTypes/exercise/dataPoints/strength-20261024"
+    }
+  ]
+}
