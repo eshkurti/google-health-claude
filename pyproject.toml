@@ -41,8 +41,8 @@ source = ["google_health_claude"]
 branch = true
 
 [tool.coverage.report]
-# Branch coverage measured 89.7% when the gate was added; raise it as tests grow.
-fail_under = 89
+# Branch coverage measured 92.1% after the demo and golden tests; raise it as tests grow.
+fail_under = 91
 show_missing = true
 skip_covered = true
 
