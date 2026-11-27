@@ -18,3 +18,11 @@ def _refuse_connection(*_args: object, **_kwargs: object) -> None:
 def _no_network(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(socket.socket, "connect", _refuse_connection)
     monkeypatch.setattr(socket.socket, "connect_ex", _refuse_connection)
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    parser.addoption(
+        "--update-golden",
+        action="store_true",
+        help="rewrite tests/golden/ from the demo generator and derive, then check it",
+    )
