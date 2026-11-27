@@ -86,3 +86,18 @@ def test_only_cli_imports_devtools_and_demo(layer: str) -> None:
 @pytest.mark.parametrize("module", ["records", "config"])
 def test_records_and_config_import_nothing_from_the_package(module: str) -> None:
     assert imports_of(modules()[f"{PACKAGE}.{module}"]) == set()
+
+
+def test_query_imports_only_derive_schema() -> None:
+    query = [m for m in modules() if within(m, "query")]
+    assert query
+    schema = f"{PACKAGE}.derive.schema"
+    outside = sorted(
+        f"{module} imports {imported}"
+        for module in query
+        for imported in imports_of(modules()[module])
+        if not within(imported, "query")
+        and imported != schema
+        and not imported.startswith(schema + ".")  # names imported from it
+    )
+    assert outside == []
