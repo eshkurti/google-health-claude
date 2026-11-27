@@ -10,10 +10,11 @@ from __future__ import annotations
 import json
 import statistics
 import xml.etree.ElementTree as ET
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 # Field names below come from the schema notes written after the first real
 # fetch (dataSource.platform / recordingMethod, exercise.exerciseType).
@@ -28,7 +29,9 @@ def _exercise(w: dict[str, Any]) -> dict[str, Any]:
     return w.get("exercise") or {}
 
 
-def _is(w: dict[str, Any], exercise_type: str, platform: str | None = None, method: str | None = None) -> bool:
+def _is(
+    w: dict[str, Any], exercise_type: str, platform: str | None = None, method: str | None = None
+) -> bool:
     return (
         _exercise(w).get("exerciseType") == exercise_type
         and (platform is None or _source(w).get("platform") == platform)
@@ -123,13 +126,14 @@ def pick_workouts(stored: list[tuple[str, dict[str, Any]]]) -> dict[str, Workout
 
     def sort_key(entry: tuple[str, dict[str, Any]]) -> tuple[str, float]:
         file_date, w = entry
-        start = parse_time(((_exercise(w).get("interval") or {}).get("startTime")))
+        start = parse_time((_exercise(w).get("interval") or {}).get("startTime"))
         return (file_date, start.timestamp() if start else float("-inf"))
 
     picked: dict[str, Workout | None] = {}
     for target in TARGETS:
         candidates = [
-            e for e in stored
+            e
+            for e in stored
             if target.match(e[1]) and isinstance(e[1].get("name"), str) and e[1]["name"]
         ]
         if target.prefer:
@@ -195,7 +199,9 @@ def summarize_tcx(content: bytes) -> TcxSummary:
         if not isinstance(point.tag, str) or _local(point.tag) != "Trackpoint":
             continue
         summary.trackpoints += 1
-        children = {_local(c.tag): c for c in point.iter() if isinstance(c.tag, str) and c is not point}
+        children = {
+            _local(c.tag): c for c in point.iter() if isinstance(c.tag, str) and c is not point
+        }
         summary.with_heart_rate += "HeartRateBpm" in children
         summary.with_position += "Position" in children
         summary.with_altitude += "AltitudeMeters" in children

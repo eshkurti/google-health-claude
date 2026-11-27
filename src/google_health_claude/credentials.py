@@ -51,14 +51,15 @@ def load_credentials(
     if not refresh_token:
         token_file = Path(token_path) if token_path else DEFAULT_TOKEN_FILE
         if token_file.exists():
-            refresh_token = json.loads(token_file.read_text(encoding="utf-8")).get(
-                "refresh_token"
-            )
+            refresh_token = json.loads(token_file.read_text(encoding="utf-8")).get("refresh_token")
 
     missing = [
         name
         for name, value in (
-            ("client id/secret (use --client-secret or GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET)", client_id and client_secret),
+            (
+                "client id/secret (use --client-secret or GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET)",
+                client_id and client_secret,
+            ),
             ("refresh token (run `auth` first or set GOOGLE_REFRESH_TOKEN)", refresh_token),
         )
         if not value

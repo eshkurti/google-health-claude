@@ -3,8 +3,8 @@
 import json
 
 import pytest
-
 from fakes import FakeResponse, FakeSession
+
 from google_health_claude.cli import build_parser
 from google_health_claude.client import HealthClient
 from google_health_claude.credentials import Credentials
@@ -21,12 +21,16 @@ EXT = "http://www.garmin.com/xmlschemas/ActivityExtension/v2"
 def trackpoint(time, position=True, hr=True, altitude=True):
     parts = [f"<Time>{time}</Time>"]
     if position:
-        parts.append(f"<Position><LatitudeDegrees>{LAT}</LatitudeDegrees><LongitudeDegrees>{LON}</LongitudeDegrees></Position>")
+        parts.append(
+            f"<Position><LatitudeDegrees>{LAT}</LatitudeDegrees><LongitudeDegrees>{LON}</LongitudeDegrees></Position>"
+        )
     if altitude:
         parts.append("<AltitudeMeters>41.5</AltitudeMeters>")
     if hr:
         parts.append("<HeartRateBpm><Value>131</Value></HeartRateBpm>")
-    parts.append(f'<Extensions><ns3:TPX xmlns:ns3="{EXT}"><ns3:Speed>2.9</ns3:Speed></ns3:TPX></Extensions>')
+    parts.append(
+        f'<Extensions><ns3:TPX xmlns:ns3="{EXT}"><ns3:Speed>2.9</ns3:Speed></ns3:TPX></Extensions>'
+    )
     return "<Trackpoint>" + "".join(parts) + "</Trackpoint>"
 
 
@@ -62,7 +66,14 @@ def test_summary_counts_fields_and_intervals():
 
 def test_summary_tags_are_local_names_without_namespaces():
     tags = summarize_tcx(GPS_RUN.encode()).tags
-    assert {"TrainingCenterDatabase", "Trackpoint", "Position", "LatitudeDegrees", "TPX", "Speed"} <= set(tags)
+    assert {
+        "TrainingCenterDatabase",
+        "Trackpoint",
+        "Position",
+        "LatitudeDegrees",
+        "TPX",
+        "Speed",
+    } <= set(tags)
     assert not any("{" in t for t in tags)
     assert tags == sorted(tags)
 
@@ -92,25 +103,37 @@ def workout(n, kind, platform="FITBIT", method="ACTIVELY_MEASURED", start="2026-
 def write_day(root, day, items):
     folder = root / "data" / "workouts"
     folder.mkdir(parents=True, exist_ok=True)
-    (folder / f"{day}.json").write_text(json.dumps({"date": day, "workouts": items}), encoding="utf-8")
+    (folder / f"{day}.json").write_text(
+        json.dumps({"date": day, "workouts": items}), encoding="utf-8"
+    )
 
 
 @pytest.fixture
 def data_repo(tmp_path):
-    write_day(tmp_path, "2026-01-01", [
-        workout(1, "RUNNING"),
-        workout(2, "STRENGTH_TRAINING", platform="HEALTH_CONNECT"),
-        workout(3, "WALKING", method="PASSIVELY_MEASURED"),
-    ])
-    write_day(tmp_path, "2026-01-02", [
-        workout(10, "RUNNING", start="2026-01-02T07:00:00Z"),
-        workout(11, "RUNNING", start="2026-01-02T18:00:00.5Z"),          # latest GPS run
-        workout(12, "RUNNING", method="PASSIVELY_MEASURED", start="2026-01-02T20:00:00Z"),
-        workout(13, "RUNNING", platform="HEALTH_CONNECT", start="2026-01-02T21:00:00Z"),
-        workout(14, "STRENGTH_TRAINING", platform="HEALTH_CONNECT"),
-        workout(15, "WALKING", method="ACTIVELY_MEASURED"),
-    ])
-    write_day(tmp_path, "2026-01-03", [workout(20, "STRENGTH_TRAINING", method="PASSIVELY_MEASURED")])
+    write_day(
+        tmp_path,
+        "2026-01-01",
+        [
+            workout(1, "RUNNING"),
+            workout(2, "STRENGTH_TRAINING", platform="HEALTH_CONNECT"),
+            workout(3, "WALKING", method="PASSIVELY_MEASURED"),
+        ],
+    )
+    write_day(
+        tmp_path,
+        "2026-01-02",
+        [
+            workout(10, "RUNNING", start="2026-01-02T07:00:00Z"),
+            workout(11, "RUNNING", start="2026-01-02T18:00:00.5Z"),  # latest GPS run
+            workout(12, "RUNNING", method="PASSIVELY_MEASURED", start="2026-01-02T20:00:00Z"),
+            workout(13, "RUNNING", platform="HEALTH_CONNECT", start="2026-01-02T21:00:00Z"),
+            workout(14, "STRENGTH_TRAINING", platform="HEALTH_CONNECT"),
+            workout(15, "WALKING", method="ACTIVELY_MEASURED"),
+        ],
+    )
+    write_day(
+        tmp_path, "2026-01-03", [workout(20, "STRENGTH_TRAINING", method="PASSIVELY_MEASURED")]
+    )
     return tmp_path
 
 
@@ -122,7 +145,7 @@ def test_picks_latest_matching_workout_for_each_target(data_repo):
     picked = pick_workouts(load_workouts(data_repo))
     assert picked["running"].exercise_id == "11"
     assert picked["strength"].exercise_id == "20"  # FITBIT preferred over Health Connect
-    assert picked["walking"].exercise_id == "3"     # passive only; 15 was actively measured
+    assert picked["walking"].exercise_id == "3"  # passive only; 15 was actively measured
     assert picked["running"].file_date == "2026-01-02"
 
 
@@ -148,16 +171,20 @@ TOKEN = FakeResponse(200, {"access_token": "tok", "expires_in": 3599})
 
 
 def test_probe_tcx_flow(data_repo, tmp_path, capsys):
-    session = FakeSession([
-        TOKEN,
-        FakeResponse(200, text=GPS_RUN),                                 # running: has points, no retry
-        FakeResponse(200, text=NO_POINTS),                               # strength: empty ...
-        FakeResponse(200, text=GPS_RUN),                                 # ... retried with partialData
-        FakeResponse(404, {"error": {"code": 404, "message": "no TCX"}}),  # walking: fails ...
-        FakeResponse(500, {"error": {"message": "boom"}}),               # ... retry: 5xx, retried
-        FakeResponse(404, {"error": {"code": 404, "message": "still no TCX"}}),
-    ])
-    client = HealthClient(Credentials("id", "secret", "refresh"), session=session, sleep=lambda _: None)
+    session = FakeSession(
+        [
+            TOKEN,
+            FakeResponse(200, text=GPS_RUN),  # running: has points, no retry
+            FakeResponse(200, text=NO_POINTS),  # strength: empty ...
+            FakeResponse(200, text=GPS_RUN),  # ... retried with partialData
+            FakeResponse(404, {"error": {"code": 404, "message": "no TCX"}}),  # walking: fails ...
+            FakeResponse(500, {"error": {"message": "boom"}}),  # ... retry: 5xx, retried
+            FakeResponse(404, {"error": {"code": 404, "message": "still no TCX"}}),
+        ]
+    )
+    client = HealthClient(
+        Credentials("id", "secret", "refresh"), session=session, sleep=lambda _: None
+    )
     save_dir = tmp_path / "out"
 
     failures = probe_tcx(client, data_repo, save_dir)
@@ -195,7 +222,9 @@ def test_probe_tcx_flow(data_repo, tmp_path, capsys):
 def test_probe_tcx_reports_missing_workouts(tmp_path, capsys):
     write_day(tmp_path, "2026-01-01", [workout(1, "RUNNING")])
     session = FakeSession([TOKEN, FakeResponse(200, text=GPS_RUN)])
-    client = HealthClient(Credentials("id", "secret", "refresh"), session=session, sleep=lambda _: None)
+    client = HealthClient(
+        Credentials("id", "secret", "refresh"), session=session, sleep=lambda _: None
+    )
     assert probe_tcx(client, tmp_path, tmp_path / "out") == 2
     assert capsys.readouterr().out.count("SKIP") == 2
 

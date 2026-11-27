@@ -16,7 +16,16 @@ from typing import Any
 
 from ..tcx import exercise_id
 from .values import (
-    dig, local_date, local_iso, mean, minutes_between, monday, num, scaled, timestamp, weighted_mean,
+    dig,
+    local_date,
+    local_iso,
+    mean,
+    minutes_between,
+    monday,
+    num,
+    scaled,
+    timestamp,
+    weighted_mean,
 )
 from .workouts import WorkoutTables
 
@@ -49,10 +58,21 @@ ZONES = ("LIGHT", "MODERATE", "VIGOROUS", "PEAK")
 # Data types a full day is expected to have (floors is always empty for this band;
 # run-vo2-max and weight only exist on some days).
 EXPECTED_DAILY = (
-    "steps", "distance", "active-energy-burned", "total-calories", "heart-rate", "active-minutes",
-    "active-zone-minutes", "time-in-heart-rate-zone", "sedentary-period",
-    "daily-resting-heart-rate", "daily-heart-rate-variability", "daily-oxygen-saturation",
-    "daily-respiratory-rate", "daily-sleep-temperature-derivations", "daily-vo2-max",
+    "steps",
+    "distance",
+    "active-energy-burned",
+    "total-calories",
+    "heart-rate",
+    "active-minutes",
+    "active-zone-minutes",
+    "time-in-heart-rate-zone",
+    "sedentary-period",
+    "daily-resting-heart-rate",
+    "daily-heart-rate-variability",
+    "daily-oxygen-saturation",
+    "daily-respiratory-rate",
+    "daily-sleep-temperature-derivations",
+    "daily-vo2-max",
     "daily-heart-rate-zones",
 )
 
@@ -79,13 +99,23 @@ def _summary(metrics: dict, data_type: str, key: str) -> dict:
     return {}
 
 
-def _breakdown(metrics: dict, data_type: str, path: tuple[str, ...], key: str, value: str,
-               factor: float, names: tuple[str, ...]) -> dict[str, float | None]:
+def _breakdown(
+    metrics: dict,
+    data_type: str,
+    path: tuple[str, ...],
+    key: str,
+    value: str,
+    factor: float,
+    names: tuple[str, ...],
+) -> dict[str, float | None]:
     rollup = metrics.get(data_type)
     if not isinstance(rollup, dict):
         return {}
-    found = {str(item.get(key)): scaled(item.get(value), factor)
-             for item in dig(rollup, *path) or [] if isinstance(item, dict)}
+    found = {
+        str(item.get(key)): scaled(item.get(value), factor)
+        for item in dig(rollup, *path) or []
+        if isinstance(item, dict)
+    }
     return {name: found.get(name, 0.0) for name in names}
 
 
@@ -100,39 +130,86 @@ def weigh_ins(daily_files: dict[date, dict]) -> list[dict]:
                 samples.append((moment, grams, str(dig(point, "dataSource", "platform") or "")))
     kept: list[tuple[datetime, float, set[str]]] = []
     for moment, grams, source in sorted(samples):
-        duplicate = next((k for k in kept if k[1] == grams and local_date(k[0]) == local_date(moment)
-                          and moment - k[0] <= WEIGHT_DUPLICATE_WINDOW), None)
+        duplicate = next(
+            (
+                k
+                for k in kept
+                if k[1] == grams
+                and local_date(k[0]) == local_date(moment)
+                and moment - k[0] <= WEIGHT_DUPLICATE_WINDOW
+            ),
+            None,
+        )
         if duplicate:
             duplicate[2].add(source)
         else:
             kept.append((moment, grams, {source}))
-    return [{"timestamp_local": local_iso(m), "weight_kg": g / 1000, "source": ";".join(sorted(src - {""})) or None}
-            for m, g, src in kept]
+    return [
+        {
+            "timestamp_local": local_iso(m),
+            "weight_kg": g / 1000,
+            "source": ";".join(sorted(src - {""})) or None,
+        }
+        for m, g, src in kept
+    ]
 
 
-def daily_row(day: date, metrics: dict, is_partial: bool, weight_kg: float | None) -> dict[str, Any]:
+def daily_row(
+    day: date, metrics: dict, is_partial: bool, weight_kg: float | None
+) -> dict[str, Any]:
     hr = dig(metrics, "heart-rate", "heartRate") or {}
     hrv = _summary(metrics, "daily-heart-rate-variability", "dailyHeartRateVariability")
     spo2 = _summary(metrics, "daily-oxygen-saturation", "dailyOxygenSaturation")
-    temp = _summary(metrics, "daily-sleep-temperature-derivations", "dailySleepTemperatureDerivations")
+    temp = _summary(
+        metrics, "daily-sleep-temperature-derivations", "dailySleepTemperatureDerivations"
+    )
     vo2 = _summary(metrics, "daily-vo2-max", "dailyVo2Max")
-    nightly, baseline = num(temp.get("nightlyTemperatureCelsius")), num(temp.get("baselineTemperatureCelsius"))
+    nightly, baseline = (
+        num(temp.get("nightlyTemperatureCelsius")),
+        num(temp.get("baselineTemperatureCelsius")),
+    )
 
     # The API leaves zero-valued entries out of these breakdowns (an absent zone
     # always coincides with zero Active Zone Minutes for it), so with the day's
     # rollup present an absent level or zone is 0; without the rollup it stays empty.
-    active = _breakdown(metrics, "active-minutes", ("activeMinutes", "activeMinutesRollupByActivityLevel"),
-                        "activityLevel", "activeMinutesSum", 1, ("LIGHT", "MODERATE", "VIGOROUS"))
-    in_zone = _breakdown(metrics, "time-in-heart-rate-zone", ("timeInHeartRateZone", "timeInHeartRateZones"),
-                         "heartRateZone", "duration", 1 / 60, ZONES)
+    active = _breakdown(
+        metrics,
+        "active-minutes",
+        ("activeMinutes", "activeMinutesRollupByActivityLevel"),
+        "activityLevel",
+        "activeMinutesSum",
+        1,
+        ("LIGHT", "MODERATE", "VIGOROUS"),
+    )
+    in_zone = _breakdown(
+        metrics,
+        "time-in-heart-rate-zone",
+        ("timeInHeartRateZone", "timeInHeartRateZones"),
+        "heartRateZone",
+        "duration",
+        1 / 60,
+        ZONES,
+    )
     bounds = {
-        str(item.get("heartRateZoneType")): (num(item.get("minBeatsPerMinute")), num(item.get("maxBeatsPerMinute")))
-        for item in _summary(metrics, "daily-heart-rate-zones", "dailyHeartRateZones").get("heartRateZones") or []
+        str(item.get("heartRateZoneType")): (
+            num(item.get("minBeatsPerMinute")),
+            num(item.get("maxBeatsPerMinute")),
+        )
+        for item in _summary(metrics, "daily-heart-rate-zones", "dailyHeartRateZones").get(
+            "heartRateZones"
+        )
+        or []
         if isinstance(item, dict)
     }
     azm = dig(metrics, "active-zone-minutes", "activeZoneMinutes")
-    azm_parts = [num(azm.get(k)) for k in ("sumInFatBurnHeartZone", "sumInCardioHeartZone", "sumInPeakHeartZone")] \
-        if isinstance(azm, dict) else []
+    azm_parts = (
+        [
+            num(azm.get(k))
+            for k in ("sumInFatBurnHeartZone", "sumInCardioHeartZone", "sumInPeakHeartZone")
+        ]
+        if isinstance(azm, dict)
+        else []
+    )
     azm_present = [v for v in azm_parts if v is not None]
 
     row: dict[str, Any] = {
@@ -144,20 +221,34 @@ def daily_row(day: date, metrics: dict, is_partial: bool, weight_kg: float | Non
         "hr_avg_bpm": num(hr.get("beatsPerMinuteAvg")),
         "hr_min_bpm": num(hr.get("beatsPerMinuteMin")),
         "hr_max_bpm": num(hr.get("beatsPerMinuteMax")),
-        "resting_hr_bpm": num(_summary(metrics, "daily-resting-heart-rate", "dailyRestingHeartRate").get("beatsPerMinute")),
+        "resting_hr_bpm": num(
+            _summary(metrics, "daily-resting-heart-rate", "dailyRestingHeartRate").get(
+                "beatsPerMinute"
+            )
+        ),
         "hrv_ms": num(hrv.get("averageHeartRateVariabilityMilliseconds")),
-        "hrv_deep_rmssd_ms": num(hrv.get("deepSleepRootMeanSquareOfSuccessiveDifferencesMilliseconds")),
+        "hrv_deep_rmssd_ms": num(
+            hrv.get("deepSleepRootMeanSquareOfSuccessiveDifferencesMilliseconds")
+        ),
         "hrv_entropy": num(hrv.get("entropy")),
         "hrv_nonrem_hr_bpm": num(hrv.get("nonRemHeartRateBeatsPerMinute")),
         "spo2_avg_pct": num(spo2.get("averagePercentage")),
         "spo2_lower_pct": num(spo2.get("lowerBoundPercentage")),
         "spo2_upper_pct": num(spo2.get("upperBoundPercentage")),
         "spo2_std_pct": num(spo2.get("standardDeviationPercentage")),
-        "resp_rate_brpm": num(_summary(metrics, "daily-respiratory-rate", "dailyRespiratoryRate").get("breathsPerMinute")),
-        "sleep_temp_vs_baseline_c": nightly - baseline if nightly is not None and baseline is not None else None,
+        "resp_rate_brpm": num(
+            _summary(metrics, "daily-respiratory-rate", "dailyRespiratoryRate").get(
+                "breathsPerMinute"
+            )
+        ),
+        "sleep_temp_vs_baseline_c": nightly - baseline
+        if nightly is not None and baseline is not None
+        else None,
         "vo2max": num(vo2.get("vo2Max")),
         "vo2max_level": vo2.get("cardioFitnessLevel") or None,
-        "sedentary_min": scaled(dig(metrics, "sedentary-period", "sedentaryPeriod", "durationSum"), 1 / 60),
+        "sedentary_min": scaled(
+            dig(metrics, "sedentary-period", "sedentaryPeriod", "durationSum"), 1 / 60
+        ),
         "active_light_min": active.get("LIGHT"),
         "active_moderate_min": active.get("MODERATE"),
         "active_vigorous_min": active.get("VIGOROUS"),
@@ -184,45 +275,62 @@ def sleep_rows(nights: dict[date, dict]) -> tuple[list[dict], list[dict]]:
                 continue
             bed = timestamp(dig(sleep, "interval", "startTime"))
             wake = timestamp(dig(sleep, "interval", "endTime"))
-            sleep_id = exercise_id(str(item.get("name") or "")) or f"{night.isoformat()}_{local_iso(bed)}"
+            sleep_id = (
+                exercise_id(str(item.get("name") or "")) or f"{night.isoformat()}_{local_iso(bed)}"
+            )
             if sleep_id in seen:
                 continue
             seen.add(sleep_id)
             summary = sleep.get("summary") or {}
-            by_stage = {str(s.get("type")): num(s.get("minutes"))
-                        for s in summary.get("stagesSummary") or [] if isinstance(s, dict)}
+            by_stage = {
+                str(s.get("type")): num(s.get("minutes"))
+                for s in summary.get("stagesSummary") or []
+                if isinstance(s, dict)
+            }
             short = [a for a in sleep.get("shortAwakenings") or [] if isinstance(a, dict)]
-            short_min = [minutes_between(timestamp(a.get("startTime")), timestamp(a.get("endTime"))) for a in short]
+            short_min = [
+                minutes_between(timestamp(a.get("startTime")), timestamp(a.get("endTime")))
+                for a in short
+            ]
             in_bed = minutes_between(bed, wake)
             asleep_min = num(summary.get("minutesAsleep"))
-            sessions.append({
-                "id": sleep_id,
-                "date": night.isoformat(),
-                "is_main": bool(dig(sleep, "metadata", "mainSleep")),
-                "bed_local": local_iso(bed),
-                "wake_local": local_iso(wake),
-                "time_in_bed_min": in_bed,
-                "asleep_h": asleep_min / 60 if asleep_min is not None else None,
-                "awake_min": num(summary.get("minutesAwake")),
-                "deep_min": by_stage.get("DEEP"),
-                "rem_min": by_stage.get("REM"),
-                "light_min": by_stage.get("LIGHT"),
-                "latency_min": num(summary.get("minutesToFallAsleep")),
-                "short_awakenings_count": len(short),
-                "short_awakenings_min": sum(m for m in short_min if m is not None),
-                "efficiency_pct": asleep_min / in_bed * 100 if asleep_min is not None and in_bed else None,
-            })
+            sessions.append(
+                {
+                    "id": sleep_id,
+                    "date": night.isoformat(),
+                    "is_main": bool(dig(sleep, "metadata", "mainSleep")),
+                    "bed_local": local_iso(bed),
+                    "wake_local": local_iso(wake),
+                    "time_in_bed_min": in_bed,
+                    "asleep_h": asleep_min / 60 if asleep_min is not None else None,
+                    "awake_min": num(summary.get("minutesAwake")),
+                    "deep_min": by_stage.get("DEEP"),
+                    "rem_min": by_stage.get("REM"),
+                    "light_min": by_stage.get("LIGHT"),
+                    "latency_min": num(summary.get("minutesToFallAsleep")),
+                    "short_awakenings_count": len(short),
+                    "short_awakenings_min": sum(m for m in short_min if m is not None),
+                    "efficiency_pct": asleep_min / in_bed * 100
+                    if asleep_min is not None and in_bed
+                    else None,
+                }
+            )
             for stage in sleep.get("stages") or []:
                 if not isinstance(stage, dict):
                     continue
                 start, end = timestamp(stage.get("startTime")), timestamp(stage.get("endTime"))
                 if start is None:
                     continue
-                stages.append({
-                    "sleep_id": sleep_id, "night": night.isoformat(), "stage": stage.get("type"),
-                    "start_local": local_iso(start), "end_local": local_iso(end),
-                    "minutes": minutes_between(start, end),
-                })
+                stages.append(
+                    {
+                        "sleep_id": sleep_id,
+                        "night": night.isoformat(),
+                        "stage": stage.get("type"),
+                        "start_local": local_iso(start),
+                        "end_local": local_iso(end),
+                        "minutes": minutes_between(start, end),
+                    }
+                )
     stages.sort(key=lambda r: (r["sleep_id"], r["start_local"]))
     return sessions, stages
 
@@ -236,8 +344,11 @@ def outlier_flags(series: dict[date, float], rule: OutlierRule) -> dict[date, bo
     """
     flags: dict[date, bool | None] = {}
     for day, value in series.items():
-        window = [series[d] for d in (day - timedelta(days=i) for i in range(1, OUTLIER_WINDOW_DAYS + 1))
-                  if d in series]
+        window = [
+            series[d]
+            for d in (day - timedelta(days=i) for i in range(1, OUTLIER_WINDOW_DAYS + 1))
+            if d in series
+        ]
         if len(window) < OUTLIER_MIN_VALUES:
             flags[day] = None
             continue
@@ -256,7 +367,11 @@ def build_days(data_dir: Path, workouts: WorkoutTables, as_of: date) -> dict[str
 
     def fetched(day: date) -> bool:
         metrics = (daily_files.get(day) or {}).get("metrics") or {}
-        return any(v for k, v in metrics.items() if k != "weight") or day in nights or day in workout_days
+        return (
+            any(v for k, v in metrics.items() if k != "weight")
+            or day in nights
+            or day in workout_days
+        )
 
     all_days = sorted(d for d in set(daily_files) | set(nights) | workout_days if fetched(d))
     partial_from = as_of - timedelta(days=PARTIAL_DAYS - 1)
@@ -266,15 +381,21 @@ def build_days(data_dir: Path, workouts: WorkoutTables, as_of: date) -> dict[str
         weight_by_day.setdefault(w["timestamp_local"][:10], []).append(w["weight_kg"])
 
     daily = [
-        daily_row(day, (daily_files.get(day) or {}).get("metrics") or {}, day >= partial_from,
-                  mean(weight_by_day.get(day.isoformat(), [])))
+        daily_row(
+            day,
+            (daily_files.get(day) or {}).get("metrics") or {},
+            day >= partial_from,
+            mean(weight_by_day.get(day.isoformat(), [])),
+        )
         for day in all_days
     ]
     sleep, stages = sleep_rows(nights)
 
     by_day = {date.fromisoformat(r["date"]): r for r in daily}
     flags = {
-        column: outlier_flags({d: r[column] for d, r in by_day.items() if r[column] is not None}, rule)
+        column: outlier_flags(
+            {d: r[column] for d, r in by_day.items() if r[column] is not None}, rule
+        )
         for column, rule in OUTLIER_RULES.items()
     }
     sleep_days = {r["date"] for r in sleep}
@@ -289,40 +410,61 @@ def build_days(data_dir: Path, workouts: WorkoutTables, as_of: date) -> dict[str
         if day.isoformat() not in sleep_days:
             missing.append("sleep")
         empties = tcx_needed.get(day.isoformat())
-        quality.append({
-            "date": day.isoformat(),
-            "missing_metrics": ";".join(missing) or None,
-            "is_partial": day >= partial_from,
-            "hrv_outlier": flags["hrv_ms"].get(day),
-            "resting_hr_outlier": flags["resting_hr_bpm"].get(day),
-            "spo2_outlier": flags["spo2_avg_pct"].get(day),
-            "tcx_empty": any(empties) if empties else None,
-        })
+        quality.append(
+            {
+                "date": day.isoformat(),
+                "missing_metrics": ";".join(missing) or None,
+                "is_partial": day >= partial_from,
+                "hrv_outlier": flags["hrv_ms"].get(day),
+                "resting_hr_outlier": flags["resting_hr_bpm"].get(day),
+                "spo2_outlier": flags["spo2_avg_pct"].get(day),
+                "tcx_empty": any(empties) if empties else None,
+            }
+        )
 
     weekly = weekly_rows(daily, sleep, quality, workouts.workouts, weight_by_day, as_of)
-    return {"daily": daily, "weight": weight, "sleep": sleep, "sleep_stages": stages,
-            "quality": quality, "weekly": weekly}
+    return {
+        "daily": daily,
+        "weight": weight,
+        "sleep": sleep,
+        "sleep_stages": stages,
+        "quality": quality,
+        "weekly": weekly,
+    }
 
 
-def weekly_rows(daily: list[dict], sleep: list[dict], quality: list[dict], workouts: list[dict],
-                weight_by_day: dict[str, list[float]], as_of: date) -> list[dict]:
+def weekly_rows(
+    daily: list[dict],
+    sleep: list[dict],
+    quality: list[dict],
+    workouts: list[dict],
+    weight_by_day: dict[str, list[float]],
+    as_of: date,
+) -> list[dict]:
     if not daily:
         return []
     by_day = {r["date"]: r for r in daily}
     hrv_flag = {r["date"]: r["hrv_outlier"] for r in quality}
-    first, last = monday(date.fromisoformat(daily[0]["date"])), monday(date.fromisoformat(daily[-1]["date"]))
+    first, last = (
+        monday(date.fromisoformat(daily[0]["date"])),
+        monday(date.fromisoformat(daily[-1]["date"])),
+    )
     rows = []
     week = first
     while week <= last:
         days = [(week + timedelta(days=i)).isoformat() for i in range(7)]
         rows_in = [by_day[d] for d in days if d in by_day]
         with_data = sum(1 for r in rows_in if r["steps"] is not None or r["hr_avg_bpm"] is not None)
-        runs = [w for w in workouts if w["date"] in days and w["type"] == "RUNNING" and w["is_training"]]
+        runs = [
+            w for w in workouts if w["date"] in days and w["type"] == "RUNNING" and w["is_training"]
+        ]
         has_any = bool(with_data or runs)
         zone_runs = [w for w in runs if w["hard_share"] is not None]
         hard = sum(w["min_vigorous"] + w["min_peak"] for w in zone_runs)
-        zone_total = sum(sum(w[f"min_{z}"] or 0 for z in ("light", "moderate", "vigorous", "peak"))
-                         for w in zone_runs)
+        zone_total = sum(
+            sum(w[f"min_{z}"] or 0 for z in ("light", "moderate", "vigorous", "peak"))
+            for w in zone_runs
+        )
         main_sleep = [r["asleep_h"] for r in sleep if r["date"] in days and r["is_main"]]
         azm = [r["azm_points"] for r in rows_in if r["azm_points"] is not None]
 
@@ -330,24 +472,31 @@ def weekly_rows(daily: list[dict], sleep: list[dict], quality: list[dict], worko
             values = [w[key] for w in runs if w[key] is not None]
             return sum(values) if values else (0.0 if has_any and not runs else None)
 
-        rows.append({
-            "week_start": days[0],
-            "week_end": days[-1],
-            "runs": len(runs) if has_any else None,
-            "run_km": total("distance_km"),
-            "long_run_km": max((w["distance_km"] for w in runs if w["distance_km"] is not None), default=None),
-            "run_duration_min": total("duration_min"),
-            "run_avg_hr_bpm": weighted_mean((w["avg_hr_bpm"], w["duration_min"]) for w in runs),
-            "run_hard_share": hard / zone_total if zone_total else None,
-            "azm_points": sum(azm) if azm else None,
-            "sleep_h_avg": mean(main_sleep),
-            "resting_hr_avg_bpm": mean(r["resting_hr_bpm"] for r in rows_in),
-            "hrv_avg_ms": mean(r["hrv_ms"] for r in rows_in),
-            "hrv_avg_ex_outliers_ms": mean(r["hrv_ms"] for r in rows_in if hrv_flag.get(r["date"]) is not True),
-            "weight_kg_avg": mean(mean(weight_by_day[d]) for d in days if d in weight_by_day),
-            "days_with_data": with_data,
-            "is_complete": with_data == 7 and not any(r["is_partial"] for r in rows_in)
-                           and date.fromisoformat(days[-1]) < as_of,
-        })
+        rows.append(
+            {
+                "week_start": days[0],
+                "week_end": days[-1],
+                "runs": len(runs) if has_any else None,
+                "run_km": total("distance_km"),
+                "long_run_km": max(
+                    (w["distance_km"] for w in runs if w["distance_km"] is not None), default=None
+                ),
+                "run_duration_min": total("duration_min"),
+                "run_avg_hr_bpm": weighted_mean((w["avg_hr_bpm"], w["duration_min"]) for w in runs),
+                "run_hard_share": hard / zone_total if zone_total else None,
+                "azm_points": sum(azm) if azm else None,
+                "sleep_h_avg": mean(main_sleep),
+                "resting_hr_avg_bpm": mean(r["resting_hr_bpm"] for r in rows_in),
+                "hrv_avg_ms": mean(r["hrv_ms"] for r in rows_in),
+                "hrv_avg_ex_outliers_ms": mean(
+                    r["hrv_ms"] for r in rows_in if hrv_flag.get(r["date"]) is not True
+                ),
+                "weight_kg_avg": mean(mean(weight_by_day[d]) for d in days if d in weight_by_day),
+                "days_with_data": with_data,
+                "is_complete": with_data == 7
+                and not any(r["is_partial"] for r in rows_in)
+                and date.fromisoformat(days[-1]) < as_of,
+            }
+        )
         week += timedelta(days=7)
     return rows

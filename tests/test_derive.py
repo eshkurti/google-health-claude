@@ -7,8 +7,8 @@ import sqlite3
 from datetime import date, timedelta
 
 import pytest
-
 from derive_fixtures import AS_OF, COORD_MARKERS, build_dataset
+
 from google_health_claude.cli import main
 from google_health_claude.derive import derive
 from google_health_claude.derive.days import OUTLIER_RULES, OutlierRule, outlier_flags
@@ -58,7 +58,15 @@ def test_cells_keep_missing_empty_and_zero_as_zero():
 
 def test_duplicated_fitbit_run_is_merged_and_health_connect_copies_are_counted(run):
     workouts = by(run["table"]("workouts"), "id")
-    assert set(workouts) == {"runA", "runB1", "runC", "runD", "walk1", "str1", "card1"}  # no hcB/hcX/runB2
+    assert set(workouts) == {
+        "runA",
+        "runB1",
+        "runC",
+        "runD",
+        "walk1",
+        "str1",
+        "card1",
+    }  # no hcB/hcX/runB2
     b = workouts["runB1"]
     assert b["merged_ids"] == "runB2" and b["n_raw_merged"] == "2" and b["n_hc_copies"] == "1"
     assert workouts["runA"]["n_raw_merged"] == "1" and workouts["runA"]["n_hc_copies"] == "0"
@@ -141,7 +149,9 @@ def test_run_facts(run):
     assert float(c["hr_second_half_minus_first_half_bpm"]) == pytest.approx(9.4, abs=0.5)
     assert float(c["avg_hr_delta_vs_previous_run_bpm"]) == 5  # 155 vs runB 150
     assert float(c["avg_hr_delta_vs_4wk_avg_bpm"]) == 6  # 155 vs mean(148, 150)
-    assert float(d["avg_hr_delta_vs_4wk_avg_bpm"]) == pytest.approx(150 - (148 + 150 + 155) / 3, abs=0.001)
+    assert float(d["avg_hr_delta_vs_4wk_avg_bpm"]) == pytest.approx(
+        150 - (148 + 150 + 155) / 3, abs=0.001
+    )
     assert a["avg_hr_delta_vs_previous_run_bpm"] == "" and a["first_km_pace_min_km"] != ""
     assert float(c["fastest_km_pace_min_km"]) < float(c["slowest_km_pace_min_km"])
     assert a["slow_km_count"] == "0"
@@ -179,7 +189,11 @@ def test_daily_values_units_and_missing(run):
 def test_zones_left_out_of_a_present_rollup_are_zero_but_a_missing_rollup_is_empty(run):
     daily = by(run["table"]("daily"), "date")
     zero, missing = daily["2026-11-11"], daily["2026-11-13"]
-    assert zero["zone_vigorous_min"] == "0" and zero["zone_peak_min"] == "0" and zero["zone_light_min"] != ""
+    assert (
+        zero["zone_vigorous_min"] == "0"
+        and zero["zone_peak_min"] == "0"
+        and zero["zone_light_min"] != ""
+    )
     assert zero["active_moderate_min"] == "0" and zero["active_vigorous_min"] == "0"
     assert missing["zone_light_min"] == "" and missing["zone_peak_min"] == ""
     assert daily["2026-11-12"]["active_moderate_min"] == "0"  # the fixture never sends MODERATE
@@ -196,7 +210,11 @@ def test_weigh_ins_go_to_weight_csv_with_duplicates_merged(run):
     assert [(r["timestamp_local"], r["weight_kg"], r["source"]) for r in weight] == [
         ("2026-09-03T07:30:00+02:00", "80.5", "FITBIT"),  # summer time: UTC+2
         ("2026-09-07T07:45:00+02:00", "80.25", "FITBIT"),
-        ("2026-11-10T07:00:00+01:00", "78.001", "FITBIT;FITBIT_WEB_API"),  # duplicate 47 s later merged
+        (
+            "2026-11-10T07:00:00+01:00",
+            "78.001",
+            "FITBIT;FITBIT_WEB_API",
+        ),  # duplicate 47 s later merged
         ("2026-11-10T19:00:00+01:00", "79.001", "FITBIT"),
     ]
 
@@ -213,13 +231,21 @@ def test_weight_only_days_stay_out_of_the_day_tables(run):
 def test_last_three_days_are_partial(run):
     daily = by(run["table"]("daily"), "date")
     assert run["report"].as_of == AS_OF
-    assert [d for d, r in daily.items() if r["is_partial"] == "true"] == ["2026-11-21", "2026-11-22", "2026-11-23"]
+    assert [d for d, r in daily.items() if r["is_partial"] == "true"] == [
+        "2026-11-21",
+        "2026-11-22",
+        "2026-11-23",
+    ]
 
 
 def test_sleep_rows_and_stages(run):
     sleep = by(run["table"]("sleep"), "id")
     s = sleep["s15"]
-    assert s["date"] == "2026-11-15" and s["is_main"] == "true" and sleep["nap15"]["is_main"] == "false"
+    assert (
+        s["date"] == "2026-11-15"
+        and s["is_main"] == "true"
+        and sleep["nap15"]["is_main"] == "false"
+    )
     assert s["bed_local"] == "2026-11-14T23:30:00+01:00" and float(s["asleep_h"]) == 7
     assert s["deep_min"] == "60" and s["latency_min"] == "10"
     assert s["short_awakenings_count"] == "2" and s["short_awakenings_min"] == "3"
@@ -231,7 +257,9 @@ def test_sleep_rows_and_stages(run):
 def test_hrv_outlier_is_flagged_on_its_day_only(run):
     quality = run["table"]("quality")
     assert [q["date"] for q in quality if q["hrv_outlier"] == "true"] == ["2026-11-20"]
-    assert not any(q["resting_hr_outlier"] == "true" or q["spo2_outlier"] == "true" for q in quality)
+    assert not any(
+        q["resting_hr_outlier"] == "true" or q["spo2_outlier"] == "true" for q in quality
+    )
     assert by(quality, "date")["2026-10-19"]["hrv_outlier"] == ""  # no history yet
     assert "daily-oxygen-saturation" in by(quality, "date")["2026-11-12"]["missing_metrics"]
 
@@ -276,14 +304,21 @@ def test_weeks_run_monday_to_sunday(run):
     weekly = by(run["table"]("weekly"), "week_start")
     assert list(weekly)[0] == "2026-10-19" and weekly["2026-11-09"]["week_end"] == "2026-11-15"
     nov9, nov16, nov23 = weekly["2026-11-09"], weekly["2026-11-16"], weekly["2026-11-23"]
-    assert nov9["runs"] == "1" and float(nov9["run_km"]) == 2.52  # Sunday runA; passive walk not counted
+    assert (
+        nov9["runs"] == "1" and float(nov9["run_km"]) == 2.52
+    )  # Sunday runA; passive walk not counted
     assert nov16["runs"] == "2"  # Monday duplicate counted once, plus runC
     assert nov23["runs"] == "1"  # runD: Sunday 23:30 UTC is Monday in Berlin
     assert nov9["is_complete"] == "true" and nov9["days_with_data"] == "7"
     assert nov16["is_complete"] == "false"  # 21 and 22 Nov are partial
     assert nov23["is_complete"] == "false"  # current week
-    assert weekly["2026-11-02"]["days_with_data"] == "6" and weekly["2026-11-02"]["is_complete"] == "false"
-    assert float(weekly["2026-11-16"]["hrv_avg_ms"]) > float(weekly["2026-11-16"]["hrv_avg_ex_outliers_ms"])
+    assert (
+        weekly["2026-11-02"]["days_with_data"] == "6"
+        and weekly["2026-11-02"]["is_complete"] == "false"
+    )
+    assert float(weekly["2026-11-16"]["hrv_avg_ms"]) > float(
+        weekly["2026-11-16"]["hrv_avg_ex_outliers_ms"]
+    )
     assert float(weekly["2026-11-09"]["sleep_h_avg"]) == 7  # the nap is not averaged in
 
 
@@ -318,9 +353,11 @@ def test_sqlite_has_every_table_and_valid_foreign_keys(run):
 def test_exercise_points_do_not_bridge_gps_gaps(run):
     with sqlite3.connect(run["db"]) as conn:
         rows = conn.execute(
-            "SELECT t_s, speed_m_s, alt_m FROM exercise_points WHERE workout_id='runA' ORDER BY t_s").fetchall()
+            "SELECT t_s, speed_m_s, alt_m FROM exercise_points WHERE workout_id='runA' ORDER BY t_s"
+        ).fetchall()
         passive = conn.execute(
-            "SELECT COUNT(*), COUNT(speed_m_s), COUNT(hr_bpm) FROM exercise_points WHERE workout_id='str1'").fetchone()
+            "SELECT COUNT(*), COUNT(speed_m_s), COUNT(hr_bpm) FROM exercise_points WHERE workout_id='str1'"
+        ).fetchone()
     speeds = [s for _, s, _ in rows if s is not None]
     assert max(speeds) < 3.05  # the 57 m jump across the 21 s gap never shows up as speed
     assert not any(200 < t < 221 for t, _, _ in rows)  # nothing interpolated into the gap
@@ -329,7 +366,8 @@ def test_exercise_points_do_not_bridge_gps_gaps(run):
     assert all(abs(alt - 80) <= 3 for t, _, alt in rows if t >= 221)
     with sqlite3.connect(run["db"]) as conn:
         short_gap = conn.execute(
-            "SELECT t_s, alt_m FROM exercise_points WHERE workout_id='runD' ORDER BY t_s").fetchall()
+            "SELECT t_s, alt_m FROM exercise_points WHERE workout_id='runD' ORDER BY t_s"
+        ).fetchall()
     assert all(abs(alt - 50) <= 3 for t, alt in short_gap if t <= 100)
     assert all(abs(alt - 80) <= 3 for t, alt in short_gap if t >= 108)
     assert passive[0] > 0 and passive[1] == 0 and passive[2] == passive[0]
@@ -338,14 +376,18 @@ def test_exercise_points_do_not_bridge_gps_gaps(run):
 def test_rerun_is_byte_stable_and_notes_are_never_overwritten(run, tmp_path):
     notes = run["out"] / "notes.csv"
     assert notes.read_text(encoding="utf-8") == "date,rpe_1_10,feeling,pain,shoes,other\n"
-    notes.write_text("date,rpe_1_10,feeling,pain,shoes,other\n2026-11-19,7,tired,,,\n", encoding="utf-8")
+    notes.write_text(
+        "date,rpe_1_10,feeling,pain,shoes,other\n2026-11-19,7,tired,,,\n", encoding="utf-8"
+    )
     before = {p.name: p.read_bytes() for p in run["out"].iterdir()}
     db = tmp_path / "again.sqlite"
     report = derive(run["data"], run["out"], db, log=lambda m: None)
     assert report.files_changed == 0 and not report.notes_created
     assert {p.name: p.read_bytes() for p in run["out"].iterdir()} == before
     with sqlite3.connect(db) as conn:
-        assert conn.execute("SELECT date, rpe_1_10, feeling FROM notes").fetchall() == [("2026-11-19", "7", "tired")]
+        assert conn.execute("SELECT date, rpe_1_10, feeling FROM notes").fetchall() == [
+            ("2026-11-19", "7", "tired")
+        ]
 
 
 def test_output_inside_the_data_folder_is_refused(run):
@@ -354,11 +396,25 @@ def test_output_inside_the_data_folder_is_refused(run):
 
 
 def test_cli_derive(run, tmp_path, capsys):
-    assert main(["derive", "--data-dir", str(run["data"].parent), "--out", str(tmp_path / "o"),
-                 "--as-of", "2026-11-23"]) == 0
+    assert (
+        main(
+            [
+                "derive",
+                "--data-dir",
+                str(run["data"].parent),
+                "--out",
+                str(tmp_path / "o"),
+                "--as-of",
+                "2026-11-23",
+            ]
+        )
+        == 0
+    )
     assert (tmp_path / "o" / "workouts.csv").exists() and (tmp_path / "o" / "schema.md").exists()
     assert "workouts 7" in capsys.readouterr().err
-    assert main(["derive", "--data-dir", str(tmp_path / "missing"), "--out", str(tmp_path / "x")]) == 1
+    assert (
+        main(["derive", "--data-dir", str(tmp_path / "missing"), "--out", str(tmp_path / "x")]) == 1
+    )
 
 
 def test_strength_fixture_is_irregular(run):

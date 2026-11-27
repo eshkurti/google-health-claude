@@ -2,8 +2,8 @@ from datetime import date
 
 import pytest
 import requests
-
 from fakes import FakeResponse, FakeSession, NotJsonResponse
+
 from google_health_claude.client import AuthError, HealthApiError, HealthClient
 from google_health_claude.credentials import Credentials
 
@@ -85,7 +85,9 @@ def test_daily_rollup_request_body():
 
 
 def test_network_errors_are_retried():
-    c, _ = client([requests.ConnectionError("reset"), FakeResponse(200, {"dataPoints": [{"ok": 1}]})])
+    c, _ = client(
+        [requests.ConnectionError("reset"), FakeResponse(200, {"dataPoints": [{"ok": 1}]})]
+    )
     assert c.list_data_points("steps") == [{"ok": 1}]
 
 

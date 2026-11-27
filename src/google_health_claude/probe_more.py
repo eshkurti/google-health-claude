@@ -14,10 +14,11 @@ types page (read Nov 2026). None of it is confirmed live except the snake_case
 from __future__ import annotations
 
 import statistics
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
-from typing import Any, Callable, Iterator
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from .client import HealthApiError
@@ -30,7 +31,13 @@ EXPECTED_REFUSALS = (400, 403, 404)
 
 # How a list filter selects a time range, per record kind.
 SAMPLE, INTERVAL, DAILY, SLEEP, ECG, NO_FILTER, ROLLUP = (
-    "sample", "interval", "daily", "sleep", "ecg", "no-filter", "rollup",
+    "sample",
+    "interval",
+    "daily",
+    "sleep",
+    "ecg",
+    "no-filter",
+    "rollup",
 )
 
 
@@ -86,11 +93,20 @@ OTHER_TYPES: tuple[TypeInfo, ...] = (
 GUESSED_TYPES: tuple[TypeInfo, ...] = tuple(
     TypeInfo(name, NO_FILTER, "guess, not in docs")
     for name in (
-        "daily-readiness", "daily-readiness-score", "readiness-score",
-        "sleep-score", "daily-sleep-score",
-        "stress-score", "daily-stress-score", "stress-management-score",
-        "cardio-load", "daily-cardio-load", "training-load",
-        "resilience", "daily-resilience", "cardio-fitness-score",
+        "daily-readiness",
+        "daily-readiness-score",
+        "readiness-score",
+        "sleep-score",
+        "daily-sleep-score",
+        "stress-score",
+        "daily-stress-score",
+        "stress-management-score",
+        "cardio-load",
+        "daily-cardio-load",
+        "training-load",
+        "resilience",
+        "daily-resilience",
+        "cardio-fitness-score",
     )
 )
 
@@ -210,7 +226,9 @@ def _number(value: Any) -> float | None:
 
 def max_bpm(points: list[Any]) -> float | None:
     values = [
-        n for p in points for path, v in _walk(p)
+        n
+        for p in points
+        for path, v in _walk(p)
         if path.rsplit(".", 1)[-1] == "beatsPerMinute" and (n := _number(v)) is not None
     ]
     return max(values) if values else None
@@ -225,9 +243,11 @@ def median_spacing_s(points: list[Any]) -> float | None:
 def zone_boundaries(points: list[Any]) -> str:
     """How many points carry per-zone min/max bpm fields (docs: min/maxBeatsPerMinute)."""
     with_bounds = sum(
-        any(name.rsplit(".", 1)[-1].lower().startswith(("min", "max", "lower", "upper"))
+        any(
+            name.rsplit(".", 1)[-1].lower().startswith(("min", "max", "lower", "upper"))
             and "beatsperminute" in name.lower()
-            for name in field_names(p))
+            for name in field_names(p)
+        )
         for p in points
     )
     return f"{'yes' if with_bounds else 'no'} ({with_bounds}/{len(points)} points)"
@@ -268,7 +288,9 @@ def _one_call(client: Any, info: TypeInfo, start: date, end_exclusive: date) -> 
             points = client.daily_rollup(info.data_type, start, end_exclusive)
             return Outcome(client.last_status, points)
         body = client.list_page(info.data_type, range_filters(info, start, end_exclusive)[0])
-        return Outcome(client.last_status, body.get("dataPoints", []), bool(body.get("nextPageToken")))
+        return Outcome(
+            client.last_status, body.get("dataPoints", []), bool(body.get("nextPageToken"))
+        )
     except HealthApiError as err:
         return Outcome(err.status, [], error=str(err))
 
@@ -317,10 +339,14 @@ def probe_more(client: Any, data_dir: Path, today: date, out: Print = print) -> 
     # 3. Body and fitness samples, last 90 days.
     out("\n== 3. weight, body-fat, altitude, run-vo2-max, last 90 days ==")
     for info in (
-        TypeInfo("weight", SAMPLE), TypeInfo("body-fat", SAMPLE),
-        TypeInfo("altitude", INTERVAL), TypeInfo("run-vo2-max", SAMPLE),
+        TypeInfo("weight", SAMPLE),
+        TypeInfo("body-fat", SAMPLE),
+        TypeInfo("altitude", INTERVAL),
+        TypeInfo("run-vo2-max", SAMPLE),
     ):
-        result = _list_all(client, info.data_type, range_filters(info, today - timedelta(days=89), end))
+        result = _list_all(
+            client, info.data_type, range_filters(info, today - timedelta(days=89), end)
+        )
         outcomes.append(result)
         _report(out, info.data_type, result)
 

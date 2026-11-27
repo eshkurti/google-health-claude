@@ -24,10 +24,11 @@ from __future__ import annotations
 import gzip
 import json
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from .client import HealthApiError
 from .store import day_path, load_json, write_bytes_if_changed, write_if_changed
@@ -107,8 +108,13 @@ def export_tcx_for_days(
             def fail(status: int, error: str, safe_id: str = ex_id) -> None:
                 report.failed += 1
                 report.failures.append(
-                    {"date": day.isoformat(), "exercise_id": safe_id, "exercise_type": kind,
-                     "status": status, "error": error}
+                    {
+                        "date": day.isoformat(),
+                        "exercise_id": safe_id,
+                        "exercise_type": kind,
+                        "status": status,
+                        "error": error,
+                    }
                 )
                 log(f"TCX failed for the {kind} workout on {day} (HTTP {status}): {error}")
 

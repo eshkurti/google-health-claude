@@ -9,10 +9,10 @@ from __future__ import annotations
 
 import json
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
-from typing import Callable
 
 from .days import build_days
 from .output import ensure_notes, read_notes, write_csvs, write_sqlite
@@ -58,8 +58,10 @@ def derive(
     data_dir = resolve_data_dir(data_dir)
     out_dir = Path(out_dir)
     for label, target in (("--out", out_dir), ("--sqlite", sqlite_path)):
-        if target is not None and (Path(target).resolve() == data_dir.resolve()
-                                   or data_dir.resolve() in Path(target).resolve().parents):
+        if target is not None and (
+            Path(target).resolve() == data_dir.resolve()
+            or data_dir.resolve() in Path(target).resolve().parents
+        ):
             raise ValueError(f"{label} must not be inside the data folder")
     report = DeriveReport(as_of=as_of or default_as_of(data_dir))
 
@@ -80,7 +82,10 @@ def derive(
 
     for warning in report.warnings:
         log(f"warning: {warning}")
-    log(f"Derived up to {report.as_of} (last 3 days partial): "
+    log(
+        f"Derived up to {report.as_of} (last 3 days partial): "
         + ", ".join(f"{name} {n}" for name, n in report.rows.items())
-        + f"; {report.files_changed} files changed" + ("; notes.csv created" if report.notes_created else ""))
+        + f"; {report.files_changed} files changed"
+        + ("; notes.csv created" if report.notes_created else "")
+    )
     return report

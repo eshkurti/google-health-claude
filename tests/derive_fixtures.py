@@ -37,7 +37,10 @@ AS_OF = date(2026, 11, 23)
 FIRST_DAY, LAST_DAY, MISSING_DAY = date(2026, 10, 19), date(2026, 11, 23), date(2026, 11, 4)
 HRV_OUTLIER_DAY, NO_SPO2_DAY, WEIGH_DAY = date(2026, 11, 20), date(2026, 11, 12), date(2026, 11, 10)
 ZERO_ZONE_DAY, NO_ZONE_DAY = date(2026, 11, 11), date(2026, 11, 13)
-WEIGHT_ONLY = ((date(2026, 9, 3), "2026-09-03T05:30:00Z", 80500), (date(2026, 9, 7), "2026-09-07T05:45:00Z", 80250))
+WEIGHT_ONLY = (
+    (date(2026, 9, 3), "2026-09-03T05:30:00Z", 80500),
+    (date(2026, 9, 7), "2026-09-07T05:45:00Z", 80250),
+)
 
 
 def utc(text: str) -> datetime:
@@ -96,8 +99,10 @@ def tcx_bytes(start: datetime, points, gps: bool, alt_step=None) -> bytes:
     for i, (t, hr, d) in enumerate(points):
         parts = [f"<Time>{z(start + timedelta(seconds=t))}</Time>"]
         if gps:
-            parts.append(f"<Position><LatitudeDegrees>{LAT}</LatitudeDegrees>"
-                         f"<LongitudeDegrees>{LON}</LongitudeDegrees></Position>")
+            parts.append(
+                f"<Position><LatitudeDegrees>{LAT}</LatitudeDegrees>"
+                f"<LongitudeDegrees>{LON}</LongitudeDegrees></Position>"
+            )
             jump = alt_step[1] if alt_step and t >= alt_step[0] else 0
             parts.append(f"<AltitudeMeters>{50 + jump + (i % 7) - 3:.1f}</AltitudeMeters>")
             parts.append(f"<DistanceMeters>{d:.1f}</DistanceMeters>")
@@ -128,14 +133,20 @@ def splits_from(start: datetime, points) -> list[dict]:
             seconds, metres = t - prev_t, d - prev_d
             if metres <= 0:
                 break
-            splits.append({
-                "splitType": "DISTANCE",
-                "startTime": z(start + timedelta(seconds=prev_t)), "startUtcOffset": "3600s",
-                "endTime": z(start + timedelta(seconds=t)), "endUtcOffset": "3600s",
-                "activeDuration": f"{seconds:g}s",
-                "metricsSummary": {"distanceMillimeters": int(round(metres * 1000)),
-                                   "averagePaceSecondsPerMeter": seconds / metres},
-            })
+            splits.append(
+                {
+                    "splitType": "DISTANCE",
+                    "startTime": z(start + timedelta(seconds=prev_t)),
+                    "startUtcOffset": "3600s",
+                    "endTime": z(start + timedelta(seconds=t)),
+                    "endUtcOffset": "3600s",
+                    "activeDuration": f"{seconds:g}s",
+                    "metricsSummary": {
+                        "distanceMillimeters": int(round(metres * 1000)),
+                        "averagePaceSecondsPerMeter": seconds / metres,
+                    },
+                }
+            )
             prev_t, prev_d, km = t, d, km + 1
     return splits
 
@@ -143,48 +154,86 @@ def splits_from(start: datetime, points) -> list[dict]:
 # -- records -----------------------------------------------------------------------------
 
 
-def workout(ex_id, ex_type, start, seconds, platform="FITBIT", method="ACTIVELY_MEASURED",
-            distance_m=0.0, avg_hr=None, steps=None, zones=None, azm=None, splits=None, elevation_mm=None):
+def workout(
+    ex_id,
+    ex_type,
+    start,
+    seconds,
+    platform="FITBIT",
+    method="ACTIVELY_MEASURED",
+    distance_m=0.0,
+    avg_hr=None,
+    steps=None,
+    zones=None,
+    azm=None,
+    splits=None,
+    elevation_mm=None,
+):
     end = start + timedelta(seconds=seconds)
-    summary = {"distanceMillimeters": int(round(distance_m * 1000)),
-               "averagePaceSecondsPerMeter": seconds / distance_m if distance_m else 0.0}
+    summary = {
+        "distanceMillimeters": int(round(distance_m * 1000)),
+        "averagePaceSecondsPerMeter": seconds / distance_m if distance_m else 0.0,
+    }
     if steps is not None:
         summary["steps"] = str(steps)
     if avg_hr is not None:
         summary["averageHeartRateBeatsPerMinute"] = str(avg_hr)
         summary["caloriesKcal"] = int(seconds / 6)
     if zones is not None:
-        summary["heartRateZoneDurations"] = {f"{n}Time": f"{s}s" for n, s in
-                                             zip(("light", "moderate", "vigorous", "peak"), zones)}
+        summary["heartRateZoneDurations"] = {
+            f"{n}Time": f"{s}s" for n, s in zip(("light", "moderate", "vigorous", "peak"), zones)
+        }
     if azm is not None:
         summary["activeZoneMinutes"] = str(azm)
     if elevation_mm is not None:
         summary["elevationGainMillimeters"] = elevation_mm
     exercise = {
-        "exerciseType": ex_type, "displayName": ex_type.title(), "activeDuration": f"{seconds}s",
-        "interval": {"startTime": z(start), "startUtcOffset": "3600s", "endTime": z(end), "endUtcOffset": "3600s"},
+        "exerciseType": ex_type,
+        "displayName": ex_type.title(),
+        "activeDuration": f"{seconds}s",
+        "interval": {
+            "startTime": z(start),
+            "startUtcOffset": "3600s",
+            "endTime": z(end),
+            "endUtcOffset": "3600s",
+        },
         "metricsSummary": summary,
     }
     if splits:
         exercise["splits"] = splits
-    return {"name": f"users/0000/dataTypes/exercise/dataPoints/{ex_id}",
-            "dataSource": {"platform": platform, "recordingMethod": method}, "exercise": exercise}
+    return {
+        "name": f"users/0000/dataTypes/exercise/dataPoints/{ex_id}",
+        "dataSource": {"platform": platform, "recordingMethod": method},
+        "exercise": exercise,
+    }
 
 
 def weight_point(point_id: str, platform: str, grams: int, stamp: str) -> dict:
-    return {"name": f"users/0000/dataTypes/weight/dataPoints/{point_id}",
-            "dataSource": {"platform": platform, "recordingMethod": "MANUAL"},
-            "weight": {"weightGrams": grams, "sampleTime": {"physicalTime": stamp, "utcOffset": "3600s"}}}
+    return {
+        "name": f"users/0000/dataTypes/weight/dataPoints/{point_id}",
+        "dataSource": {"platform": platform, "recordingMethod": "MANUAL"},
+        "weight": {
+            "weightGrams": grams,
+            "sampleTime": {"physicalTime": stamp, "utcOffset": "3600s"},
+        },
+    }
 
 
 def daily_metrics(day: date, i: int) -> dict:
     def rollup(key, payload):
-        return {"civilStartTime": {"date": ymd(day)}, "civilEndTime": {"date": ymd(day + timedelta(days=1))},
-                key: payload}
+        return {
+            "civilStartTime": {"date": ymd(day)},
+            "civilEndTime": {"date": ymd(day + timedelta(days=1))},
+            key: payload,
+        }
 
     def summary(key, payload):
-        return [{"dataSource": {"platform": "FITBIT", "recordingMethod": "DERIVED"},
-                 key: {"date": ymd(day), **payload}}]
+        return [
+            {
+                "dataSource": {"platform": "FITBIT", "recordingMethod": "DERIVED"},
+                key: {"date": ymd(day), **payload},
+            }
+        ]
 
     hrv = 95.0 if day == HRV_OUTLIER_DAY else 40.0 + (i % 5) - 2
     metrics = {
@@ -192,36 +241,91 @@ def daily_metrics(day: date, i: int) -> dict:
         "distance": rollup("distance", {"millimetersSum": str(6_000_000 + 1000 * i)}),
         "active-energy-burned": rollup("activeEnergyBurned", {"kcalSum": 500.5}),
         "total-calories": rollup("totalCalories", {"kcalSum": 2500.25}),
-        "heart-rate": rollup("heartRate", {"beatsPerMinuteAvg": 70.5, "beatsPerMinuteMin": 50, "beatsPerMinuteMax": 160}),
-        "active-minutes": rollup("activeMinutes", {"activeMinutesRollupByActivityLevel": [
-            {"activityLevel": "LIGHT", "activeMinutesSum": "120"},
-            {"activityLevel": "VIGOROUS", "activeMinutesSum": "25"}]}),
-        "active-zone-minutes": rollup("activeZoneMinutes", {
-            "sumInFatBurnHeartZone": "10" if day == date(2026, 11, 16) else "0",
-            "sumInCardioHeartZone": "60" if day == date(2026, 11, 16) else "0",
-            "sumInPeakHeartZone": "12" if day == date(2026, 11, 16) else "0"}),
-        "time-in-heart-rate-zone": rollup("timeInHeartRateZone", {"timeInHeartRateZones": [
-            {"heartRateZone": "LIGHT", "duration": "80000s"}, {"heartRateZone": "MODERATE", "duration": "600s"},
-            {"heartRateZone": "VIGOROUS", "duration": "1800s"}, {"heartRateZone": "PEAK", "duration": "360s"}]}),
+        "heart-rate": rollup(
+            "heartRate",
+            {"beatsPerMinuteAvg": 70.5, "beatsPerMinuteMin": 50, "beatsPerMinuteMax": 160},
+        ),
+        "active-minutes": rollup(
+            "activeMinutes",
+            {
+                "activeMinutesRollupByActivityLevel": [
+                    {"activityLevel": "LIGHT", "activeMinutesSum": "120"},
+                    {"activityLevel": "VIGOROUS", "activeMinutesSum": "25"},
+                ]
+            },
+        ),
+        "active-zone-minutes": rollup(
+            "activeZoneMinutes",
+            {
+                "sumInFatBurnHeartZone": "10" if day == date(2026, 11, 16) else "0",
+                "sumInCardioHeartZone": "60" if day == date(2026, 11, 16) else "0",
+                "sumInPeakHeartZone": "12" if day == date(2026, 11, 16) else "0",
+            },
+        ),
+        "time-in-heart-rate-zone": rollup(
+            "timeInHeartRateZone",
+            {
+                "timeInHeartRateZones": [
+                    {"heartRateZone": "LIGHT", "duration": "80000s"},
+                    {"heartRateZone": "MODERATE", "duration": "600s"},
+                    {"heartRateZone": "VIGOROUS", "duration": "1800s"},
+                    {"heartRateZone": "PEAK", "duration": "360s"},
+                ]
+            },
+        ),
         "sedentary-period": rollup("sedentaryPeriod", {"durationSum": "36000s"}),
-        "daily-resting-heart-rate": summary("dailyRestingHeartRate", {"beatsPerMinute": str(55 + (i % 3) - 1)}),
-        "daily-heart-rate-variability": summary("dailyHeartRateVariability", {
-            "averageHeartRateVariabilityMilliseconds": hrv,
-            "deepSleepRootMeanSquareOfSuccessiveDifferencesMilliseconds": 45.5,
-            "entropy": 2.5, "nonRemHeartRateBeatsPerMinute": "58"}),
-        "daily-oxygen-saturation": summary("dailyOxygenSaturation", {
-            "averagePercentage": 96 + ((i % 4) - 1.5) * 0.2, "lowerBoundPercentage": 94,
-            "upperBoundPercentage": 98.5, "standardDeviationPercentage": 1.25}),
+        "daily-resting-heart-rate": summary(
+            "dailyRestingHeartRate", {"beatsPerMinute": str(55 + (i % 3) - 1)}
+        ),
+        "daily-heart-rate-variability": summary(
+            "dailyHeartRateVariability",
+            {
+                "averageHeartRateVariabilityMilliseconds": hrv,
+                "deepSleepRootMeanSquareOfSuccessiveDifferencesMilliseconds": 45.5,
+                "entropy": 2.5,
+                "nonRemHeartRateBeatsPerMinute": "58",
+            },
+        ),
+        "daily-oxygen-saturation": summary(
+            "dailyOxygenSaturation",
+            {
+                "averagePercentage": 96 + ((i % 4) - 1.5) * 0.2,
+                "lowerBoundPercentage": 94,
+                "upperBoundPercentage": 98.5,
+                "standardDeviationPercentage": 1.25,
+            },
+        ),
         "daily-respiratory-rate": summary("dailyRespiratoryRate", {"breathsPerMinute": 14.5}),
-        "daily-sleep-temperature-derivations": summary("dailySleepTemperatureDerivations", {
-            "nightlyTemperatureCelsius": 33.75, "baselineTemperatureCelsius": 33.5,
-            "relativeNightlyStddev30dCelsius": 0.25}),
-        "daily-vo2-max": summary("dailyVo2Max", {"vo2Max": 42.5, "vo2MaxCovariance": 1.5,
-                                                 "cardioFitnessLevel": "AVERAGE"}),
-        "daily-heart-rate-zones": summary("dailyHeartRateZones", {"heartRateZones": [
-            {"heartRateZoneType": t, "minBeatsPerMinute": str(lo), "maxBeatsPerMinute": str(hi)}
-            for t, lo, hi in (("LIGHT", 30, 116), ("MODERATE", 117, 142),
-                              ("VIGOROUS", 143, 175), ("PEAK", 176, 220))]}),
+        "daily-sleep-temperature-derivations": summary(
+            "dailySleepTemperatureDerivations",
+            {
+                "nightlyTemperatureCelsius": 33.75,
+                "baselineTemperatureCelsius": 33.5,
+                "relativeNightlyStddev30dCelsius": 0.25,
+            },
+        ),
+        "daily-vo2-max": summary(
+            "dailyVo2Max",
+            {"vo2Max": 42.5, "vo2MaxCovariance": 1.5, "cardioFitnessLevel": "AVERAGE"},
+        ),
+        "daily-heart-rate-zones": summary(
+            "dailyHeartRateZones",
+            {
+                "heartRateZones": [
+                    {
+                        "heartRateZoneType": t,
+                        "minBeatsPerMinute": str(lo),
+                        "maxBeatsPerMinute": str(hi),
+                    }
+                    for t, lo, hi in (
+                        ("LIGHT", 30, 116),
+                        ("MODERATE", 117, 142),
+                        ("VIGOROUS", 143, 175),
+                        ("PEAK", 176, 220),
+                    )
+                ]
+            },
+        ),
     }
     if day == NO_SPO2_DAY:
         del metrics["daily-oxygen-saturation"]
@@ -235,16 +339,23 @@ def daily_metrics(day: date, i: int) -> dict:
     if day == WEIGH_DAY:
         metrics["weight"] = [
             weight_point(f"w{n}", platform, grams, stamp)
-            for n, (platform, grams, stamp) in enumerate((
-                ("FITBIT", 78001, "2026-11-10T06:00:00Z"),
-                ("FITBIT_WEB_API", 78001, "2026-11-10T06:00:47Z"),
-                ("FITBIT", 79001, "2026-11-10T18:00:00Z"),
-            ))
+            for n, (platform, grams, stamp) in enumerate(
+                (
+                    ("FITBIT", 78001, "2026-11-10T06:00:00Z"),
+                    ("FITBIT_WEB_API", 78001, "2026-11-10T06:00:47Z"),
+                    ("FITBIT", 79001, "2026-11-10T18:00:00Z"),
+                )
+            )
         ]
     if day == date(2026, 11, 16):
         metrics["run-vo2-max"] = [
-            {"dataSource": {"platform": "FITBIT", "recordingMethod": "DERIVED"},
-             "runVo2Max": {"runVo2Max": 43.6, "sampleTime": {"physicalTime": stamp, "utcOffset": "3600s"}}}
+            {
+                "dataSource": {"platform": "FITBIT", "recordingMethod": "DERIVED"},
+                "runVo2Max": {
+                    "runVo2Max": 43.6,
+                    "sampleTime": {"physicalTime": stamp, "utcOffset": "3600s"},
+                },
+            }
             for stamp in ("2026-11-16T06:00:00Z", "2026-11-16T06:00:03Z")
         ]
     return metrics
@@ -253,27 +364,61 @@ def daily_metrics(day: date, i: int) -> dict:
 def sleep_session(sleep_id, bed, wake, main=True):
     stages = []
     cursor = bed
-    for stage, minutes in (("AWAKE", 10), ("LIGHT", 120), ("DEEP", 60), ("REM", 90), ("LIGHT", 150), ("AWAKE", 20)):
+    for stage, minutes in (
+        ("AWAKE", 10),
+        ("LIGHT", 120),
+        ("DEEP", 60),
+        ("REM", 90),
+        ("LIGHT", 150),
+        ("AWAKE", 20),
+    ):
         end = min(cursor + timedelta(minutes=minutes), wake)
         if end > cursor:
-            stages.append({"type": stage, "startTime": z(cursor), "endTime": z(end),
-                           "startUtcOffset": "3600s", "endUtcOffset": "3600s"})
+            stages.append(
+                {
+                    "type": stage,
+                    "startTime": z(cursor),
+                    "endTime": z(end),
+                    "startUtcOffset": "3600s",
+                    "endUtcOffset": "3600s",
+                }
+            )
         cursor = end
     return {
         "name": f"users/0000/dataTypes/sleep/dataPoints/{sleep_id}",
         "dataSource": {"platform": "FITBIT", "recordingMethod": "DERIVED"},
         "sleep": {
             "type": "STAGES",
-            "interval": {"startTime": z(bed), "endTime": z(wake), "startUtcOffset": "3600s", "endUtcOffset": "3600s"},
+            "interval": {
+                "startTime": z(bed),
+                "endTime": z(wake),
+                "startUtcOffset": "3600s",
+                "endUtcOffset": "3600s",
+            },
             "metadata": {"mainSleep": main, "processed": True},
-            "summary": {"minutesAsleep": "420", "minutesAwake": "30", "minutesInSleepPeriod": "450",
-                        "minutesToFallAsleep": "10", "minutesAfterWakeUp": "0",
-                        "stagesSummary": [{"type": t, "minutes": m, "count": "3"} for t, m in
-                                          (("AWAKE", "30"), ("LIGHT", "270"), ("DEEP", "60"), ("REM", "90"))]},
+            "summary": {
+                "minutesAsleep": "420",
+                "minutesAwake": "30",
+                "minutesInSleepPeriod": "450",
+                "minutesToFallAsleep": "10",
+                "minutesAfterWakeUp": "0",
+                "stagesSummary": [
+                    {"type": t, "minutes": m, "count": "3"}
+                    for t, m in (("AWAKE", "30"), ("LIGHT", "270"), ("DEEP", "60"), ("REM", "90"))
+                ],
+            },
             "stages": stages,
             "shortAwakenings": [
-                {"type": "LIGHT", "startTime": z(bed + timedelta(hours=2)), "endTime": z(bed + timedelta(hours=2, minutes=1))},
-                {"type": "REM", "startTime": z(bed + timedelta(hours=4)), "endTime": z(bed + timedelta(hours=4, minutes=2))},
+                {
+                    "type": "LIGHT",
+                    "startTime": z(bed + timedelta(hours=2)),
+                    "endTime": z(bed + timedelta(hours=2, minutes=1)),
+                },
+                {
+                    "type": "REM",
+                    "startTime": z(bed + timedelta(hours=4)),
+                    "endTime": z(bed + timedelta(hours=4, minutes=2)),
+                },
             ],
         },
     }
@@ -295,21 +440,31 @@ def build_dataset(root: Path) -> dict:
     i = 0
     while day <= LAST_DAY:
         if day != MISSING_DAY:
-            write_json(root / "daily" / f"{day}.json", {"date": day.isoformat(), "metrics": daily_metrics(day, i)})
+            write_json(
+                root / "daily" / f"{day}.json",
+                {"date": day.isoformat(), "metrics": daily_metrics(day, i)},
+            )
         day += timedelta(days=1)
         i += 1
 
     # Weight-only files from the weigh-in lookback, weeks before the fetched days (summer time).
     for day, stamp, grams in WEIGHT_ONLY:
-        write_json(root / "daily" / f"{day}.json",
-                   {"date": day.isoformat(), "metrics": {"weight": [weight_point(f"old{day}", "FITBIT", grams, stamp)]}})
+        write_json(
+            root / "daily" / f"{day}.json",
+            {
+                "date": day.isoformat(),
+                "metrics": {"weight": [weight_point(f"old{day}", "FITBIT", grams, stamp)]},
+            },
+        )
 
     workouts: dict[date, list] = {}
 
     def add(day: date, record: dict) -> None:
         workouts.setdefault(day, []).append(record)
 
-    track_a = make_track([(400, 3.0, 145), (60, 1.2, 130), (400, 3.0, 155)], gap=(200, 221), gap_extra_m=57.0)
+    track_a = make_track(
+        [(400, 3.0, 145), (60, 1.2, 130), (400, 3.0, 155)], gap=(200, 221), gap_extra_m=57.0
+    )
     track_b = make_track([(700, 3.2, 150)])
     track_c = make_track([(450, 3.3, 150), (450, 2.9, 160)])
     track_d = make_track([(300, 3.0, 150)], gap=(100, 108), gap_extra_m=30.0)
@@ -322,40 +477,128 @@ def build_dataset(root: Path) -> dict:
     }
     for ex_id, (start, track, distance_m, avg_hr, zones) in gps_runs.items():
         civil = (start + timedelta(hours=1)).date()
-        add(civil, workout(ex_id, "RUNNING", start, int(track[-1][0]), distance_m=distance_m, avg_hr=avg_hr,
-                           steps=int(distance_m / 0.83), zones=zones, azm=zones[2] // 30 + zones[3] // 30,
-                           splits=splits_from(start, track), elevation_mm=12000.0))
+        add(
+            civil,
+            workout(
+                ex_id,
+                "RUNNING",
+                start,
+                int(track[-1][0]),
+                distance_m=distance_m,
+                avg_hr=avg_hr,
+                steps=int(distance_m / 0.83),
+                zones=zones,
+                azm=zones[2] // 30 + zones[3] // 30,
+                splits=splits_from(start, track),
+                elevation_mm=12000.0,
+            ),
+        )
         # GPS re-acquired after the gap at another altitude
         alt_step = {"runA": (221, 30.0), "runD": (108, 30.0)}.get(ex_id)
         write_tcx(root, civil, ex_id, tcx_bytes(start, track, gps=True, alt_step=alt_step))
 
-    add(date(2026, 11, 16), workout("hcB", "RUNNING", RUN_B + timedelta(seconds=10), 710,
-                                    platform="HEALTH_CONNECT", distance_m=990.0, steps=1200))
-    add(date(2026, 11, 15), workout("walk1", "WALKING", utc("2026-11-15T14:00:00"), 2400,
-                                    method="PASSIVELY_MEASURED", distance_m=3000.0, avg_hr=95, steps=4000,
-                                    zones=(2400, 0, 0, 0), azm=0))
+    add(
+        date(2026, 11, 16),
+        workout(
+            "hcB",
+            "RUNNING",
+            RUN_B + timedelta(seconds=10),
+            710,
+            platform="HEALTH_CONNECT",
+            distance_m=990.0,
+            steps=1200,
+        ),
+    )
+    add(
+        date(2026, 11, 15),
+        workout(
+            "walk1",
+            "WALKING",
+            utc("2026-11-15T14:00:00"),
+            2400,
+            method="PASSIVELY_MEASURED",
+            distance_m=3000.0,
+            avg_hr=95,
+            steps=4000,
+            zones=(2400, 0, 0, 0),
+            azm=0,
+        ),
+    )
     strength_start = utc("2026-11-17T17:00:00")
-    strength = [(t, 100 if n % 2 == 0 else 160, None) for n, t in
-                enumerate(itertools.accumulate([0] + [3, 1] * 300))]
-    add(date(2026, 11, 17), workout("str1", "STRENGTH_TRAINING", strength_start, int(strength[-1][0]),
-                                    method="PASSIVELY_MEASURED", avg_hr=110, zones=(1200, 0, 0, 0)))
+    strength = [
+        (t, 100 if n % 2 == 0 else 160, None)
+        for n, t in enumerate(itertools.accumulate([0] + [3, 1] * 300))
+    ]
+    add(
+        date(2026, 11, 17),
+        workout(
+            "str1",
+            "STRENGTH_TRAINING",
+            strength_start,
+            int(strength[-1][0]),
+            method="PASSIVELY_MEASURED",
+            avg_hr=110,
+            zones=(1200, 0, 0, 0),
+        ),
+    )
     write_tcx(root, date(2026, 11, 17), "str1", tcx_bytes(strength_start, strength, gps=False))
     card_start = utc("2026-11-18T18:00:00")
-    add(date(2026, 11, 18), workout("card1", "CARDIO_WORKOUT", card_start, 900,
-                                    method="PASSIVELY_MEASURED", avg_hr=120, zones=(300, 600, 0, 0)))
+    add(
+        date(2026, 11, 18),
+        workout(
+            "card1",
+            "CARDIO_WORKOUT",
+            card_start,
+            900,
+            method="PASSIVELY_MEASURED",
+            avg_hr=120,
+            zones=(300, 600, 0, 0),
+        ),
+    )
     write_tcx(root, date(2026, 11, 18), "card1", tcx_bytes(card_start, [], gps=False))
-    add(date(2026, 11, 21), workout("hcX", "WALKING", utc("2026-11-21T10:00:00"), 1200,
-                                    platform="HEALTH_CONNECT", distance_m=1500.0))
+    add(
+        date(2026, 11, 21),
+        workout(
+            "hcX",
+            "WALKING",
+            utc("2026-11-21T10:00:00"),
+            1200,
+            platform="HEALTH_CONNECT",
+            distance_m=1500.0,
+        ),
+    )
     for day, items in workouts.items():
         write_json(root / "workouts" / f"{day}.json", {"date": day.isoformat(), "workouts": items})
 
-    write_json(root / "sleep" / "2026-11-15.json", {"date": "2026-11-15", "sessions": [
-        sleep_session("s15", utc("2026-11-14T22:30:00"), utc("2026-11-15T06:00:00")),
-        sleep_session("nap15", utc("2026-11-15T13:00:00"), utc("2026-11-15T13:30:00"), main=False),
-    ]})
-    write_json(root / "sleep" / "2026-11-16.json", {"date": "2026-11-16", "sessions": [
-        sleep_session("s16", utc("2026-11-15T22:00:00"), utc("2026-11-16T05:30:00")),
-    ]})
-    write_json(root / "_meta.json", {"last_fetch_utc": "2026-11-23T04:10:00Z", "window": ["2026-11-21", "2026-11-23"],
-                                     "api_errors": {}, "incomplete_days": [], "tcx": {}})
+    write_json(
+        root / "sleep" / "2026-11-15.json",
+        {
+            "date": "2026-11-15",
+            "sessions": [
+                sleep_session("s15", utc("2026-11-14T22:30:00"), utc("2026-11-15T06:00:00")),
+                sleep_session(
+                    "nap15", utc("2026-11-15T13:00:00"), utc("2026-11-15T13:30:00"), main=False
+                ),
+            ],
+        },
+    )
+    write_json(
+        root / "sleep" / "2026-11-16.json",
+        {
+            "date": "2026-11-16",
+            "sessions": [
+                sleep_session("s16", utc("2026-11-15T22:00:00"), utc("2026-11-16T05:30:00")),
+            ],
+        },
+    )
+    write_json(
+        root / "_meta.json",
+        {
+            "last_fetch_utc": "2026-11-23T04:10:00Z",
+            "window": ["2026-11-21", "2026-11-23"],
+            "api_errors": {},
+            "incomplete_days": [],
+            "tcx": {},
+        },
+    )
     return {"track_a_total_m": track_a[-1][2], "strength_points": strength}

@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
-from typing import Any, Callable
+from typing import Any
 from urllib.parse import quote
 
 import requests
@@ -208,7 +209,9 @@ class HealthClient:
         resp = self._send("GET", url, accept="*/*", params=params)
         return RawReply(resp.status_code, resp.content or b"")
 
-    def daily_rollup(self, data_type: str, start: date, end_exclusive: date) -> list[dict[str, Any]]:
+    def daily_rollup(
+        self, data_type: str, start: date, end_exclusive: date
+    ) -> list[dict[str, Any]]:
         """One aggregated point per civil day in [start, end_exclusive)."""
         url = f"{API_BASE}/users/me/dataTypes/{data_type}/dataPoints:dailyRollUp"
         body: dict[str, Any] = {

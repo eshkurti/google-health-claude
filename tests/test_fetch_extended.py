@@ -5,8 +5,8 @@ import json
 from datetime import date, timedelta
 
 import pytest
-
 from fakes import FakeClient
+
 from google_health_claude import cli
 from google_health_claude.client import HealthApiError, RawReply
 from google_health_claude.fetch import fetch_range
@@ -32,7 +32,9 @@ def run(client, data_dir, start=DAY, end=DAY, **kwargs):
 
 def test_new_daily_types_are_stored_with_the_summaries(tmp_path):
     c = FakeClient()
-    c.lists["daily-heart-rate-zones"] = [{"name": "z/1", "dailyHeartRateZones": {"heartRateZones": []}}]
+    c.lists["daily-heart-rate-zones"] = [
+        {"name": "z/1", "dailyHeartRateZones": {"heartRateZones": []}}
+    ]
     c.lists["run-vo2-max"] = [{"name": "v/1", "runVo2Max": {"vo2Max": 40.5}}]
     run(c, tmp_path)
     metrics = read(tmp_path / "daily" / "2026-01-08.json")["metrics"]
@@ -102,7 +104,10 @@ def test_weight_merges_by_timestamp_and_never_erases(tmp_path):
     run(c, tmp_path)
 
     stored = read(tmp_path / "daily" / "2026-01-08.json")["metrics"]["weight"]
-    assert [(w["name"], w["weight"]["weightGrams"]) for w in stored] == [("w/a2", 69900), ("w/b", 70400)]
+    assert [(w["name"], w["weight"]["weightGrams"]) for w in stored] == [
+        ("w/a2", 69900),
+        ("w/b", 70400),
+    ]
 
 
 def test_undated_weight_points_are_reported(tmp_path):
@@ -149,7 +154,9 @@ def cli_calls(monkeypatch):
         return Report()
 
     monkeypatch.setattr(cli, "load_credentials", lambda *a: None)
-    monkeypatch.setattr(cli, "HealthClient", lambda creds: type("C", (), {"refresh_token_expires_in": None})())
+    monkeypatch.setattr(
+        cli, "HealthClient", lambda creds: type("C", (), {"refresh_token_expires_in": None})()
+    )
     monkeypatch.setattr(cli, "fetch_range", fake_fetch_range)
     monkeypatch.setattr(cli, "today", lambda: DAY)
     return calls
@@ -174,7 +181,9 @@ def test_cli_backfill_same_window(cli_calls):
 # -- TCX ---------------------------------------------------------------------------
 
 
-def workout(n, kind="RUNNING", platform="FITBIT", method="ACTIVELY_MEASURED", end="2026-01-08T07:30:00Z"):
+def workout(
+    n, kind="RUNNING", platform="FITBIT", method="ACTIVELY_MEASURED", end="2026-01-08T07:30:00Z"
+):
     return {
         "name": f"users/0000/dataTypes/exercise/dataPoints/ex{n}",
         "dataSource": {"platform": platform, "recordingMethod": method},
@@ -228,7 +237,10 @@ def test_tcx_download_skip_rules_and_storage(tmp_path):
     c.tcx = {"ex1": OK, "ex2": EMPTY}
     report, logs = run(c, tmp_path)
 
-    assert c.tcx_calls == [("ex1", True), ("ex2", True)]  # partialData=true, no walk, no Health Connect
+    assert c.tcx_calls == [
+        ("ex1", True),
+        ("ex2", True),
+    ]  # partialData=true, no walk, no Health Connect
     assert gzip.decompress(tcx_file(tmp_path, 1).read_bytes()) == OK.content
     assert not tcx_file(tmp_path, 2).exists()  # empty shell is not stored
     meta = read(tmp_path / "_meta.json")["tcx"]
@@ -303,7 +315,11 @@ def test_tcx_failures_are_recorded_and_do_not_stop_the_run(tmp_path):
     assert tcx_file(tmp_path, 4).exists()
     meta = read(tmp_path / "_meta.json")["tcx"]
     assert (meta["fetched"], meta["failed"]) == (1, 3)
-    assert [(f["exercise_id"], f["status"]) for f in meta["failures"]] == [("ex1", 404), ("ex2", 0), ("ex3", 200)]
+    assert [(f["exercise_id"], f["status"]) for f in meta["failures"]] == [
+        ("ex1", 404),
+        ("ex2", 0),
+        ("ex3", 200),
+    ]
     assert meta["failures"][0]["error"] == "no TCX for this session"
     assert meta["failures"][0]["exercise_type"] == "RUNNING"
     assert "not valid XML" in meta["failures"][2]["error"]

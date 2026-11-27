@@ -28,7 +28,11 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     def common(p: argparse.ArgumentParser) -> None:
-        p.add_argument("--client-secret", type=Path, help="Google OAuth client JSON (not needed if GOOGLE_CLIENT_ID/SECRET are set)")
+        p.add_argument(
+            "--client-secret",
+            type=Path,
+            help="Google OAuth client JSON (not needed if GOOGLE_CLIENT_ID/SECRET are set)",
+        )
         p.add_argument("--token-file", type=Path, help="local token file written by `auth`")
 
     p_auth = sub.add_parser("auth", help="one-time browser sign-in; saves a refresh token locally")
@@ -38,7 +42,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_probe = sub.add_parser("probe", help="try every data type for one day and report what works")
     common(p_probe)
     p_probe.add_argument("--date", type=_date, help="day to probe (default: yesterday)")
-    p_probe.add_argument("--save-samples", type=Path, help="save raw responses here (contains health data!)")
+    p_probe.add_argument(
+        "--save-samples", type=Path, help="save raw responses here (contains health data!)"
+    )
 
     p_tcx = sub.add_parser(
         "probe-tcx",
@@ -46,11 +52,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     common(p_tcx)
     p_tcx.add_argument(
-        "--data-dir", type=Path, required=True,
+        "--data-dir",
+        type=Path,
+        required=True,
         help="data repo root or its data/ folder; workouts are picked from workouts/*.json",
     )
     p_tcx.add_argument(
-        "--save-samples", type=Path, default=Path("samples") / "tcx",
+        "--save-samples",
+        type=Path,
+        default=Path("samples") / "tcx",
         help="where raw TCX replies are saved (contains health data!) (default: samples/tcx)",
     )
 
@@ -60,7 +70,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     common(p_more)
     p_more.add_argument(
-        "--data-dir", type=Path, required=True,
+        "--data-dir",
+        type=Path,
+        required=True,
         help="data repo root or its data/ folder; the latest GPS run is taken from workouts/*.json",
     )
 
@@ -78,13 +90,21 @@ def build_parser() -> argparse.ArgumentParser:
     p_back.add_argument("--force", action="store_true", help="re-fetch days that already exist")
 
     p_derive = sub.add_parser(
-        "derive", help="build CSV tables (and optionally SQLite) from the fetched files; no network",
+        "derive",
+        help="build CSV tables (and optionally SQLite) from the fetched files; no network",
     )
-    p_derive.add_argument("--data-dir", type=Path, required=True, help="data repo root or its data/ folder")
-    p_derive.add_argument("--out", type=Path, required=True, help="folder for the CSV files (outside the data folder)")
-    p_derive.add_argument("--sqlite", type=Path, help="also write all tables plus exercise_points to this SQLite file")
     p_derive.add_argument(
-        "--as-of", type=_date,
+        "--data-dir", type=Path, required=True, help="data repo root or its data/ folder"
+    )
+    p_derive.add_argument(
+        "--out", type=Path, required=True, help="folder for the CSV files (outside the data folder)"
+    )
+    p_derive.add_argument(
+        "--sqlite", type=Path, help="also write all tables plus exercise_points to this SQLite file"
+    )
+    p_derive.add_argument(
+        "--as-of",
+        type=_date,
         help="date of the last fetch; it and the 2 days before are partial (default: from _meta.json)",
     )
     return parser
@@ -138,7 +158,9 @@ def main(argv: list[str] | None = None) -> int:
             report = fetch_range(client, start, end, args.data_dir)
         else:
             end = args.until or today() - timedelta(days=1)
-            report = fetch_range(client, args.since, end, args.data_dir, skip_existing=not args.force)
+            report = fetch_range(
+                client, args.since, end, args.data_dir, skip_existing=not args.force
+            )
     except (CredentialsError, AuthError, FileNotFoundError) as err:
         print(f"error: {err}", file=sys.stderr)
         return 1

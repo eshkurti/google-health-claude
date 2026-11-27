@@ -22,11 +22,13 @@ def run_auth(client_secret_path: Path, token_path: Path | None = None) -> int:
     try:
         from google_auth_oauthlib.flow import InstalledAppFlow
     except ImportError:
-        print("Missing dependency. Install it with:  pip install \"google-auth-oauthlib>=1.2\"")
+        print('Missing dependency. Install it with:  pip install "google-auth-oauthlib>=1.2"')
         return 1
 
     token_path = Path(token_path) if token_path else DEFAULT_TOKEN_FILE
-    flow = InstalledAppFlow.from_client_secrets_file(str(client_secret_path), scopes=list(READ_SCOPES))
+    flow = InstalledAppFlow.from_client_secrets_file(
+        str(client_secret_path), scopes=list(READ_SCOPES)
+    )
     creds = flow.run_local_server(
         port=0,
         access_type="offline",
@@ -36,8 +38,10 @@ def run_auth(client_secret_path: Path, token_path: Path | None = None) -> int:
     )
     raw_token = dict(flow.oauth2session.token or {})
     if not creds.refresh_token:
-        print("Google did not return a refresh token. Revoke the app at "
-              "https://myaccount.google.com/permissions and run `auth` again.")
+        print(
+            "Google did not return a refresh token. Revoke the app at "
+            "https://myaccount.google.com/permissions and run `auth` again."
+        )
         return 1
 
     token_path.parent.mkdir(parents=True, exist_ok=True)
@@ -62,15 +66,25 @@ def run_auth(client_secret_path: Path, token_path: Path | None = None) -> int:
     print("Scopes granted:")
     for scope in sorted(creds.scopes or []):
         print("  ", scope.rsplit("/", 1)[-1])
-    print("\nrefresh_token_expires_in reported by Google:", raw_token.get("refresh_token_expires_in"))
+    print(
+        "\nrefresh_token_expires_in reported by Google:", raw_token.get("refresh_token_expires_in")
+    )
 
-    client = HealthClient(Credentials(flow.client_config["client_id"], flow.client_config["client_secret"], creds.refresh_token))
+    client = HealthClient(
+        Credentials(
+            flow.client_config["client_id"],
+            flow.client_config["client_secret"],
+            creds.refresh_token,
+        )
+    )
     try:
         client.identity()
         print("\nAccount check: OK, this Google account is linked to Google Health.")
     except HealthApiError as err:
         print(f"\nAccount check failed: {err}")
         if "ACCOUNT_NOT_LINKED" in str(err):
-            print("Open the Google Health app on your phone and sign in with this Google account first.")
+            print(
+                "Open the Google Health app on your phone and sign in with this Google account first."
+            )
         return 1
     return 0

@@ -9,9 +9,10 @@ in the output instead of becoming 0.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import date, datetime, timedelta
 from statistics import median
-from typing import Any, Iterable
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from ..config import TIMEZONE

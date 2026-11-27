@@ -19,7 +19,11 @@ def test_credentials_from_env(monkeypatch):
     monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "secret")
     monkeypatch.setenv("GOOGLE_REFRESH_TOKEN", "refresh")
     creds = load_credentials()
-    assert (creds.client_id, creds.client_secret, creds.refresh_token) == ("id", "secret", "refresh")
+    assert (creds.client_id, creds.client_secret, creds.refresh_token) == (
+        "id",
+        "secret",
+        "refresh",
+    )
 
 
 def test_credentials_from_files(tmp_path, monkeypatch):

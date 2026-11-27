@@ -61,7 +61,9 @@ def write_csvs(out_dir: Path, tables: dict[str, list[dict]]) -> int:
     changed = 0
     for table in TABLES:
         if table.csv:
-            changed += write_text_if_changed(Path(out_dir) / f"{table.name}.csv", csv_text(table, tables[table.name]))
+            changed += write_text_if_changed(
+                Path(out_dir) / f"{table.name}.csv", csv_text(table, tables[table.name])
+            )
     changed += write_text_if_changed(Path(out_dir) / "schema.md", schema_markdown())
     return changed
 
@@ -80,7 +82,10 @@ def read_notes(out_dir: Path) -> list[dict]:
     if not path.exists():
         return []
     with path.open(encoding="utf-8", newline="") as handle:
-        return [{k: (v or None) for k, v in row.items() if k in NOTES.names} for row in csv.DictReader(handle)]
+        return [
+            {k: (v or None) for k, v in row.items() if k in NOTES.names}
+            for row in csv.DictReader(handle)
+        ]
 
 
 def write_sqlite(path: Path, tables: dict[str, list[dict]], notes: list[dict]) -> None:

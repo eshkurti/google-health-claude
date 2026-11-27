@@ -60,20 +60,31 @@ def read_points(path: Path) -> list[Point] | None:
         if moment is None:
             continue
         hr_el = fields.get("HeartRateBpm")
-        hr_value = next((c.text for c in hr_el if _local(c.tag) == "Value"), None) if hr_el is not None else None
+        hr_value = (
+            next((c.text for c in hr_el if _local(c.tag) == "Value"), None)
+            if hr_el is not None
+            else None
+        )
 
         def value(name: str) -> float | None:
             el = fields.get(name)
             return num(el.text) if el is not None else None
 
-        point = Point(moment, moment.timestamp(), num(hr_value), value("DistanceMeters"),
-                      value("AltitudeMeters"), "Position" in fields)
+        point = Point(
+            moment,
+            moment.timestamp(),
+            num(hr_value),
+            value("DistanceMeters"),
+            value("AltitudeMeters"),
+            "Position" in fields,
+        )
         by_time.setdefault(point.ts, point)  # first point wins on a repeated timestamp
     return [by_time[ts] for ts in sorted(by_time)]
 
 
-def hr_stats(points: list[Point], start: datetime | None = None, end: datetime | None = None
-             ) -> tuple[float | None, float | None]:
+def hr_stats(
+    points: list[Point], start: datetime | None = None, end: datetime | None = None
+) -> tuple[float | None, float | None]:
     """(time-weighted average, maximum) heart rate within [start, end)."""
     lo = start.timestamp() if start else float("-inf")
     hi = end.timestamp() if end else float("inf")
@@ -139,7 +150,11 @@ def segment_speeds(points: list[Point], segment: list[int]) -> dict[int, float |
 def segment_altitudes(points: list[Point], segment: list[int]) -> dict[int, float | None]:
     smoothed: dict[int, float | None] = {}
     for k, lo, hi in _windowed(points, segment, ALT_HALF_WINDOW_S):
-        values = [points[segment[j]].alt_m for j in range(lo, hi + 1) if points[segment[j]].alt_m is not None]
+        values = [
+            points[segment[j]].alt_m
+            for j in range(lo, hi + 1)
+            if points[segment[j]].alt_m is not None
+        ]
         smoothed[segment[k]] = sum(values) / len(values) if values else None
     return smoothed
 

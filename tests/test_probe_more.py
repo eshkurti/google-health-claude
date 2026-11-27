@@ -4,15 +4,14 @@ import json
 from datetime import date
 
 import pytest
-
 from fakes import FakeResponse, FakeSession
+
 from google_health_claude.cli import build_parser
 from google_health_claude.client import HealthApiError, HealthClient
 from google_health_claude.credentials import Credentials
 from google_health_claude.probe_more import (
     GUESSED_TYPES,
     OTHER_TYPES,
-    ROLLUP,
     TypeInfo,
     field_names,
     instant_filters,
@@ -62,7 +61,10 @@ def hr_point(t, bpm):
     return {
         "name": "users/0000/dataTypes/heart-rate/dataPoints/secret-id",
         "dataSource": {"platform": "FITBIT"},
-        "heartRate": {"beatsPerMinute": bpm, "sampleTime": {"physicalTime": t, "civilTime": {"date": {"year": 2026}}}},
+        "heartRate": {
+            "beatsPerMinute": bpm,
+            "sampleTime": {"physicalTime": t, "civilTime": {"date": {"year": 2026}}},
+        },
     }
 
 
@@ -79,7 +81,11 @@ ZONES = [
         "dailyHeartRateZones": {
             "date": {"year": 2026, "month": 1, "day": d},
             "heartRateZones": [
-                {"heartRateZoneType": "LIGHT", "minBeatsPerMinute": "97", "maxBeatsPerMinute": "123"},
+                {
+                    "heartRateZoneType": "LIGHT",
+                    "minBeatsPerMinute": "97",
+                    "maxBeatsPerMinute": "123",
+                },
             ],
         },
     }
@@ -99,7 +105,9 @@ def data_repo(tmp_path):
             "interval": {"startTime": "2026-01-08T07:00:00Z", "endTime": "2026-01-08T07:30:00.5Z"},
         },
     }
-    (folder / "2026-01-08.json").write_text(json.dumps({"date": "2026-01-08", "workouts": [run]}), encoding="utf-8")
+    (folder / "2026-01-08.json").write_text(
+        json.dumps({"date": "2026-01-08", "workouts": [run]}), encoding="utf-8"
+    )
     return tmp_path / "repo"
 
 
@@ -118,7 +126,9 @@ def test_filters_follow_the_documented_fields():
     assert range_filters(TypeInfo("daily-heart-rate-zones", "daily"), start, end)[0].startswith(
         'daily_heart_rate_zones.date >= "2026-01-04"'
     )
-    assert range_filters(TypeInfo("sleep", "sleep"), start, end)[0].startswith("sleep.interval.civil_end_time")
+    assert range_filters(TypeInfo("sleep", "sleep"), start, end)[0].startswith(
+        "sleep.interval.civil_end_time"
+    )
     # Europe/Berlin midnight is 23:00 UTC the day before in winter.
     assert range_filters(TypeInfo("electrocardiogram", "ecg"), start, end) == [
         'electrocardiogram.interval.start_time >= "2026-01-03T23:00:00Z"'
@@ -149,7 +159,12 @@ def test_summaries():
     assert time_range(ZONES) == "earliest 2026-01-05, latest 2026-01-09 (dates only)"
     assert time_range([{"x": 1}]) == "no timestamps found"
     assert zone_boundaries(ZONES) == "yes (2/2 points)"
-    assert zone_boundaries([{"dailyHeartRateZones": {"heartRateZones": [{"heartRateZoneType": "LIGHT"}]}}]) == "no (0/1 points)"
+    assert (
+        zone_boundaries(
+            [{"dailyHeartRateZones": {"heartRateZones": [{"heartRateZoneType": "LIGHT"}]}}]
+        )
+        == "no (0/1 points)"
+    )
 
 
 def test_catalog_has_no_write_only_types_and_no_duplicates():
@@ -158,7 +173,14 @@ def test_catalog_has_no_write_only_types_and_no_duplicates():
     for write_only in ("menstrual-period", "moods", "ovulation-test", "symptoms"):
         assert write_only not in names
     # Sections 1-3 are not repeated in section 4.
-    for done in ("heart-rate", "daily-heart-rate-zones", "weight", "body-fat", "altitude", "run-vo2-max"):
+    for done in (
+        "heart-rate",
+        "daily-heart-rate-zones",
+        "weight",
+        "body-fat",
+        "altitude",
+        "run-vo2-max",
+    ):
         assert done not in names
     for word in ("score", "readiness", "resilience", "load", "stress", "cardio"):
         assert any(word in n for n in names)
@@ -172,17 +194,26 @@ def test_probe_more_flow(data_repo, tmp_path, monkeypatch):
         # Only the camelCase spelling is "accepted", to exercise the fallback.
         return HR if flt.startswith("heartRate.") else HealthApiError(400, "bad filter")
 
-    client = FakeClient({
-        "heart-rate": heart_rate,
-        "daily-heart-rate-zones": ZONES,
-        "weight": [],
-        "body-fat": HealthApiError(403, "scope missing"),
-        "altitude": [{"altitude": {"gainMillimeters": "4200", "interval": {"startTime": "2026-01-02T08:00:00Z"}}}],
-        "run-vo2-max": [],
-        "steps": [{"steps": {"count": "12"}}] * 3,
-        "floors": [{"floors": {}}],
-        "sleep": HealthApiError(500, "backend error"),
-    })
+    client = FakeClient(
+        {
+            "heart-rate": heart_rate,
+            "daily-heart-rate-zones": ZONES,
+            "weight": [],
+            "body-fat": HealthApiError(403, "scope missing"),
+            "altitude": [
+                {
+                    "altitude": {
+                        "gainMillimeters": "4200",
+                        "interval": {"startTime": "2026-01-02T08:00:00Z"},
+                    }
+                }
+            ],
+            "run-vo2-max": [],
+            "steps": [{"steps": {"count": "12"}}] * 3,
+            "floors": [{"floors": {}}],
+            "sleep": HealthApiError(500, "backend error"),
+        }
+    )
     lines = []
     workdir = tmp_path / "cwd"
     workdir.mkdir()
@@ -215,7 +246,9 @@ def test_probe_more_flow(data_repo, tmp_path, monkeypatch):
     assert "altitude.gainMillimeters" in out
 
     # 4. exactly one call per type; rollup-only types use dailyRollUp
-    section4 = [c for c in client.calls if c[1] in {t.data_type for t in (*OTHER_TYPES, *GUESSED_TYPES)}]
+    section4 = [
+        c for c in client.calls if c[1] in {t.data_type for t in (*OTHER_TYPES, *GUESSED_TYPES)}
+    ]
     assert len(section4) == len(OTHER_TYPES) + len(GUESSED_TYPES)
     assert ("rollup", "floors", (date(2026, 1, 4), date(2026, 1, 11))) in client.calls
     assert any(l.startswith("  steps [list]") and l.endswith("HTTP 200, 3 points") for l in lines)
@@ -237,11 +270,15 @@ def test_probe_more_without_a_run_skips_section_1(tmp_path):
 
 
 def test_list_page_returns_one_page_and_tracks_status():
-    session = FakeSession([
-        FakeResponse(200, {"access_token": "tok", "expires_in": 3599}),
-        FakeResponse(200, {"dataPoints": [{"a": 1}], "nextPageToken": "p2"}),
-    ])
-    client = HealthClient(Credentials("id", "secret", "refresh"), session=session, sleep=lambda _: None)
+    session = FakeSession(
+        [
+            FakeResponse(200, {"access_token": "tok", "expires_in": 3599}),
+            FakeResponse(200, {"dataPoints": [{"a": 1}], "nextPageToken": "p2"}),
+        ]
+    )
+    client = HealthClient(
+        Credentials("id", "secret", "refresh"), session=session, sleep=lambda _: None
+    )
     body = client.list_page("steps", "f")
     assert body["nextPageToken"] == "p2"
     assert client.last_status == 200

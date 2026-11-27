@@ -33,7 +33,9 @@ def probe(client: Any, day: date, save_dir: Path | None = None) -> int:
     def save(name: str, payload: Any) -> None:
         if save_dir:
             save_dir.mkdir(parents=True, exist_ok=True)
-            (save_dir / f"{name}.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+            (save_dir / f"{name}.json").write_text(
+                json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8"
+            )
 
     try:
         identity = client.identity()
@@ -53,7 +55,11 @@ def probe(client: Any, day: date, save_dir: Path | None = None) -> int:
             failures += 1
             continue
         spelling = ("snake_case", "camelCase")[variant_cache.get(spec.data_type, 0)]
-        out("OK" if points else "EMPTY", spec.data_type, f"{len(points)} point(s), filter {spelling}")
+        out(
+            "OK" if points else "EMPTY",
+            spec.data_type,
+            f"{len(points)} point(s), filter {spelling}",
+        )
         if points:
             save(spec.data_type, points)
 
@@ -86,7 +92,9 @@ def _error_body(content: bytes) -> str:
     return text if len(text) <= ERROR_BODY_LIMIT else text[:ERROR_BODY_LIMIT] + "..."
 
 
-def _tcx_attempt(client: Any, workout: Workout, label: str, partial: bool, save_dir: Path) -> tuple[bool, int]:
+def _tcx_attempt(
+    client: Any, workout: Workout, label: str, partial: bool, save_dir: Path
+) -> tuple[bool, int]:
     """One export call. Returns (HTTP success, trackpoint count). Prints no values."""
     name = "partialData=true" if partial else "default"
     try:
@@ -112,7 +120,9 @@ def _tcx_attempt(client: Any, workout: Workout, label: str, partial: bool, save_
         return True, 0
     n = s.trackpoints
     print(f"    trackpoints: {n}")
-    print(f"    HeartRateBpm: {s.with_heart_rate}/{n}, Position: {s.with_position}/{n}, AltitudeMeters: {s.with_altitude}/{n}")
+    print(
+        f"    HeartRateBpm: {s.with_heart_rate}/{n}, Position: {s.with_position}/{n}, AltitudeMeters: {s.with_altitude}/{n}"
+    )
     print(f"    interval between points: {s.interval_text()}")
     print(f"    tags: {', '.join(s.tags)}")
     return True, n

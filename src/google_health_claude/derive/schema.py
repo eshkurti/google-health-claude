@@ -51,12 +51,20 @@ WORKOUTS = Table(
     "One row per deduplicated FITBIT exercise session. HEALTH_CONNECT copies are left out and "
     "counted in n_hc_copies; same-type FITBIT records whose intervals overlap are merged.",
     _cols(
-        ("id", "TEXT", "Google exercise id (last segment of the record name) of the earliest-starting record"),
+        (
+            "id",
+            "TEXT",
+            "Google exercise id (last segment of the record name) of the earliest-starting record",
+        ),
         ("date", "TEXT", "local start date (Europe/Berlin)"),
         ("start_local", "TEXT", "start, ISO 8601 with Berlin offset"),
         ("end_local", "TEXT", "end, ISO 8601 with Berlin offset"),
         ("type", "TEXT", "exerciseType, e.g. RUNNING"),
-        ("recording_method", "TEXT", "ACTIVELY_MEASURED (started on the band) or PASSIVELY_MEASURED (auto-detected)"),
+        (
+            "recording_method",
+            "TEXT",
+            "ACTIVELY_MEASURED (started on the band) or PASSIVELY_MEASURED (auto-detected)",
+        ),
         ("is_training", "BOOL", "true only for ACTIVELY_MEASURED"),
         ("has_gps", "BOOL", "its TCX has trackpoints with a position"),
         ("duration_min", "REAL", "active duration"),
@@ -75,8 +83,16 @@ WORKOUTS = Table(
         ("min_vigorous", "REAL", ZONE_DOC.format("vigorous (cardio)")),
         ("min_peak", "REAL", ZONE_DOC.format("peak")),
         ("hard_share", "REAL", "(vigorous + peak) / all four zones, 0..1"),
-        ("azm_points", "REAL", "Active Zone Minutes points (vigorous and peak count double; not clock minutes)"),
-        ("run_vo2max", "REAL", "run VO2 max estimate for this run (identical duplicates merged); unit not stated by the API"),
+        (
+            "azm_points",
+            "REAL",
+            "Active Zone Minutes points (vigorous and peak count double; not clock minutes)",
+        ),
+        (
+            "run_vo2max",
+            "REAL",
+            "run VO2 max estimate for this run (identical duplicates merged); unit not stated by the API",
+        ),
         ("merged_ids", "TEXT", "other FITBIT record ids merged into this row, ';'-separated"),
         ("n_raw_merged", "INTEGER", "FITBIT records merged into this row (1 = no duplicate)"),
         ("n_hc_copies", "INTEGER", "HEALTH_CONNECT records overlapping this session (excluded)"),
@@ -113,14 +129,34 @@ RUN_FACTS = Table(
         ("first_km_pace_min_km", "REAL", "pace of split 1 if it is a full km"),
         ("fastest_km_pace_min_km", "REAL", "fastest full km"),
         ("slowest_km_pace_min_km", "REAL", "slowest full km"),
-        ("pace_fade_s_per_km", "REAL", "second-half pace minus first-half pace, by distance, from split active times (positive = slowed down)"),
+        (
+            "pace_fade_s_per_km",
+            "REAL",
+            "second-half pace minus first-half pace, by distance, from split active times (positive = slowed down)",
+        ),
         ("slow_km_count", "INTEGER", "full km slower than 120% of the median full km"),
-        ("hr_second_half_minus_first_half_bpm", "REAL", "time-weighted TCX heart rate, halves split at half the TCX distance"),
+        (
+            "hr_second_half_minus_first_half_bpm",
+            "REAL",
+            "time-weighted TCX heart rate, halves split at half the TCX distance",
+        ),
         ("peak_hr_bpm", "REAL", "highest TCX heart rate"),
         ("gps_gap_total_s", "REAL", "sum of steps longer than 5 s between positioned TCX points"),
-        ("walk_s", "REAL", "seconds moving below 6.5 km/h (10 s centred speed, never across a GPS gap)"),
-        ("avg_hr_delta_vs_previous_run_bpm", "REAL", "avg_hr_bpm minus that of the previous GPS run"),
-        ("avg_hr_delta_vs_4wk_avg_bpm", "REAL", "avg_hr_bpm minus the mean of GPS runs in the 28 days before"),
+        (
+            "walk_s",
+            "REAL",
+            "seconds moving below 6.5 km/h (10 s centred speed, never across a GPS gap)",
+        ),
+        (
+            "avg_hr_delta_vs_previous_run_bpm",
+            "REAL",
+            "avg_hr_bpm minus that of the previous GPS run",
+        ),
+        (
+            "avg_hr_delta_vs_4wk_avg_bpm",
+            "REAL",
+            "avg_hr_bpm minus the mean of GPS runs in the 28 days before",
+        ),
     ),
     ("workout_id",),
     (("workout_id", "workouts", "id"),),
@@ -281,7 +317,11 @@ QUALITY = Table(
         ("hrv_outlier", "BOOL", "HRV outlier (empty = not enough history or no value)"),
         ("resting_hr_outlier", "BOOL", "resting heart rate outlier"),
         ("spo2_outlier", "BOOL", "SpO2 average outlier"),
-        ("tcx_empty", "BOOL", "a workout that should have a TCX has none with trackpoints (empty = no such workout)"),
+        (
+            "tcx_empty",
+            "BOOL",
+            "a workout that should have a TCX has none with trackpoints (empty = no such workout)",
+        ),
     ),
     ("date",),
 )
@@ -319,17 +359,38 @@ NOTES = Table(
 
 # Insert order respects the foreign keys.
 TABLES: tuple[Table, ...] = (
-    WORKOUTS, RUN_SPLITS, RUN_FACTS, PERSONAL_BESTS, EXERCISE_POINTS,
-    DAILY, WEIGHT, SLEEP, SLEEP_STAGES, WEEKLY, QUALITY,
+    WORKOUTS,
+    RUN_SPLITS,
+    RUN_FACTS,
+    PERSONAL_BESTS,
+    EXERCISE_POINTS,
+    DAILY,
+    WEIGHT,
+    SLEEP,
+    SLEEP_STAGES,
+    WEEKLY,
+    QUALITY,
 )
 
 
 def schema_markdown() -> str:
-    lines = ["# Derived tables", "", "Generated by `python -m google_health_claude derive`. "
-             "Times are Europe/Berlin; an empty cell means missing, never 0.", ""]
+    lines = [
+        "# Derived tables",
+        "",
+        "Generated by `python -m google_health_claude derive`. "
+        "Times are Europe/Berlin; an empty cell means missing, never 0.",
+        "",
+    ]
     for table in (*TABLES, NOTES):
         where = "CSV and SQLite" if table.csv else "SQLite only"
-        lines += [f"## {table.name} ({where})", "", table.doc, "", "| column | type | meaning |", "|---|---|---|"]
+        lines += [
+            f"## {table.name} ({where})",
+            "",
+            table.doc,
+            "",
+            "| column | type | meaning |",
+            "|---|---|---|",
+        ]
         lines += [f"| {c.name} | {c.kind} | {c.doc} |" for c in table.columns]
         lines.append("")
     return "\n".join(lines)

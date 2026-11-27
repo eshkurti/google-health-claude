@@ -2,6 +2,7 @@ import json
 from datetime import date
 
 from fakes import FakeClient
+
 from google_health_claude.client import HealthApiError
 from google_health_claude.fetch import chunks, civil_date, fetch_range
 
@@ -45,7 +46,9 @@ def test_fetch_writes_one_file_per_day_and_category(tmp_path):
     assert daily["metrics"]["steps"]["steps"]["countSum"] == "9000"
     assert daily["metrics"]["daily-resting-heart-rate"][0]["dailyRestingHeartRate"]["bpm"] == 52
     assert read(tmp_path / "sleep" / "2026-11-25.json")["sessions"] == [{"sleep": {"id": 1}}]
-    assert read(tmp_path / "workouts" / "2026-11-25.json")["workouts"][0]["exercise"]["type"] == "RUN"
+    assert (
+        read(tmp_path / "workouts" / "2026-11-25.json")["workouts"][0]["exercise"]["type"] == "RUN"
+    )
     assert read(tmp_path / "_meta.json")["window"] == ["2026-11-25", "2026-11-25"]
     assert report.requests_failed == 0
 
@@ -127,7 +130,10 @@ def test_shorter_refetch_never_erases_stored_sessions(tmp_path):
         {"name": "s/1", "v": 1},
         {"name": "s/2", "v": 22},
     ]
-    assert read(tmp_path / "workouts" / "2026-11-25.json")["workouts"] == [{"name": "e/1"}, {"name": "e/2"}]
+    assert read(tmp_path / "workouts" / "2026-11-25.json")["workouts"] == [
+        {"name": "e/1"},
+        {"name": "e/2"},
+    ]
     daily = read(tmp_path / "daily" / "2026-11-25.json")["metrics"]
     assert daily["daily-resting-heart-rate"] == [{"name": "r/1", "bpm": 51}]
 
@@ -163,7 +169,10 @@ def test_failing_type_does_not_lose_the_rest_of_the_run(tmp_path):
     c.rollups["steps"] = [rollup_point(day, "9000")]
     c.failing["sleep"] = HealthApiError(0, "network error (ReadTimeout)")
     report = fetch_range(c, day, day, tmp_path, log=lambda _: None)
-    assert read(tmp_path / "daily" / "2026-11-25.json")["metrics"]["steps"]["steps"]["countSum"] == "9000"
+    assert (
+        read(tmp_path / "daily" / "2026-11-25.json")["metrics"]["steps"]["steps"]["countSum"]
+        == "9000"
+    )
     assert "sleep" in report.errors
 
 

@@ -11,16 +11,25 @@ Dedup rules (see the data repo's schema notes):
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from itertools import groupby
 from pathlib import Path
 from statistics import median
-from typing import Any, Callable
+from typing import Any
 
 from ..tcx import exercise_id
 from ..workout_tcx import eligible
-from .points import Point, gps_segments, hr_half_delta, hr_stats, point_rows, read_points, walk_seconds
+from .points import (
+    Point,
+    gps_segments,
+    hr_half_delta,
+    hr_stats,
+    point_rows,
+    read_points,
+    walk_seconds,
+)
 from .values import dig, local_date, local_iso, mean, minutes_between, num, ratio, scaled, timestamp
 
 VO2_DUPLICATE_WINDOW = timedelta(minutes=5)
@@ -95,13 +104,18 @@ def load_raw(data_dir: Path) -> list[Raw]:
             end = timestamp(dig(rec, "exercise", "interval", "endTime"))
             if not ex_id or start is None or end is None:
                 continue
-            seen.setdefault(ex_id, Raw(
+            seen.setdefault(
                 ex_id,
-                str(dig(rec, "dataSource", "platform") or ""),
-                str(dig(rec, "dataSource", "recordingMethod") or ""),
-                str(dig(rec, "exercise", "exerciseType") or ""),
-                start, end, rec,
-            ))
+                Raw(
+                    ex_id,
+                    str(dig(rec, "dataSource", "platform") or ""),
+                    str(dig(rec, "dataSource", "recordingMethod") or ""),
+                    str(dig(rec, "exercise", "exerciseType") or ""),
+                    start,
+                    end,
+                    rec,
+                ),
+            )
     return list(seen.values())
 
 
@@ -110,7 +124,9 @@ def _overlap_s(a_start: datetime, a_end: datetime, b_start: datetime, b_end: dat
 
 
 def dedupe(raws: list[Raw]) -> list[Session]:
-    fitbit = sorted((r for r in raws if r.platform == "FITBIT"), key=lambda r: (r.type, r.start, r.id))
+    fitbit = sorted(
+        (r for r in raws if r.platform == "FITBIT"), key=lambda r: (r.type, r.start, r.id)
+    )
     sessions: list[Session] = []
     for _, group in groupby(fitbit, key=lambda r: r.type):
         current: Session | None = None
@@ -122,7 +138,11 @@ def dedupe(raws: list[Raw]) -> list[Session]:
                 sessions.append(current)
     for hc in (r for r in raws if r.platform == "HEALTH_CONNECT"):
         scored = [
-            ((s.primary.type == hc.type), _overlap_s(s.primary.start, s.span_end, hc.start, hc.end), s)
+            (
+                (s.primary.type == hc.type),
+                _overlap_s(s.primary.start, s.span_end, hc.start, hc.end),
+                s,
+            )
             for s in sessions
         ]
         scored = [entry for entry in scored if entry[1] > 0]
@@ -134,7 +154,9 @@ def dedupe(raws: list[Raw]) -> list[Session]:
 
 def tcx_index(data_dir: Path) -> dict[str, Path]:
     suffix = ".tcx.gz"
-    return {p.name[: -len(suffix)]: p for p in sorted((Path(data_dir) / "tcx").glob(f"*/*{suffix}"))}
+    return {
+        p.name[: -len(suffix)]: p for p in sorted((Path(data_dir) / "tcx").glob(f"*/*{suffix}"))
+    }
 
 
 def attach_tcx(sessions: list[Session], data_dir: Path, warn: Callable[[str], None]) -> None:
@@ -146,7 +168,9 @@ def attach_tcx(sessions: list[Session], data_dir: Path, warn: Callable[[str], No
         s.tcx_path = path
         s.points = read_points(path)
         if s.points is None:
-            warn(f"unreadable TCX for the {s.primary.type} workout on {local_date(s.primary.start)}")
+            warn(
+                f"unreadable TCX for the {s.primary.type} workout on {local_date(s.primary.start)}"
+            )
 
 
 def load_run_vo2(data_dir: Path) -> list[tuple[datetime, float]]:
@@ -171,12 +195,11 @@ def attach_run_vo2(sessions: list[Session], samples: list[tuple[datetime, float]
     """Samples are stamped at the run's start: match each to the run whose interval holds it."""
     runs = [s for s in sessions if s.primary.type == "RUNNING"]
     for moment, value in samples:
-        candidates = [
-            s for s in runs
-            if s.primary.start - VO2_MATCH_SLACK <= moment <= s.span_end
-        ]
+        candidates = [s for s in runs if s.primary.start - VO2_MATCH_SLACK <= moment <= s.span_end]
         if candidates:
-            min(candidates, key=lambda s: abs((moment - s.primary.start).total_seconds())).run_vo2max = value
+            min(
+                candidates, key=lambda s: abs((moment - s.primary.start).total_seconds())
+            ).run_vo2max = value
 
 
 # -- rows ----------------------------------------------------------------------------
@@ -192,8 +215,11 @@ def workout_row(s: Session, data_dir: Path) -> dict[str, Any]:
     summary = ex.get("metricsSummary") or {}
     zones = summary.get("heartRateZoneDurations") or {}
     zone_min = {z: scaled(zones.get(f"{z}Time"), 1 / 60) for z in ZONES}
-    zone_total = sum(v for v in zone_min.values() if v is not None) if any(
-        v is not None for v in zone_min.values()) else None
+    zone_total = (
+        sum(v for v in zone_min.values() if v is not None)
+        if any(v is not None for v in zone_min.values())
+        else None
+    )
     hard = None
     if zone_total and zone_min["vigorous"] is not None and zone_min["peak"] is not None:
         hard = (zone_min["vigorous"] + zone_min["peak"]) / zone_total
@@ -218,7 +244,9 @@ def workout_row(s: Session, data_dir: Path) -> dict[str, Any]:
         "duration_min": duration_min,
         "elapsed_min": minutes_between(s.primary.start, s.primary.end),
         "distance_km": distance_km,
-        "pace_min_km": _pace_min_km(summary.get("averagePaceSecondsPerMeter")) if distance_km else None,
+        "pace_min_km": _pace_min_km(summary.get("averagePaceSecondsPerMeter"))
+        if distance_km
+        else None,
         "avg_hr_bpm": num(summary.get("averageHeartRateBeatsPerMinute")),
         "peak_hr_bpm": peak,
         "kcal": num(summary.get("caloriesKcal")),
@@ -238,7 +266,9 @@ def workout_row(s: Session, data_dir: Path) -> dict[str, Any]:
 
 
 def split_rows(s: Session) -> list[dict[str, Any]]:
-    raw_splits = next((m.exercise.get("splits") for m in [s.primary, *s.members] if m.exercise.get("splits")), [])
+    raw_splits = next(
+        (m.exercise.get("splits") for m in [s.primary, *s.members] if m.exercise.get("splits")), []
+    )
     parsed = []
     for split in raw_splits if isinstance(raw_splits, list) else []:
         start, end = timestamp(split.get("startTime")), timestamp(split.get("endTime"))
@@ -254,12 +284,19 @@ def split_rows(s: Session) -> list[dict[str, Any]]:
         if pace is None and duration_s and distance_km:
             pace = duration_s / distance_km / 60
         avg_hr, max_hr = hr_stats(s.points, start, end) if s.points and end else (None, None)
-        rows.append({
-            "workout_id": s.primary.id, "km_no": km_no,
-            "start_local": local_iso(start), "end_local": local_iso(end),
-            "distance_km": distance_km, "duration_s": duration_s, "pace_min_km": pace,
-            "avg_hr_bpm": avg_hr, "max_hr_bpm": max_hr,
-        })
+        rows.append(
+            {
+                "workout_id": s.primary.id,
+                "km_no": km_no,
+                "start_local": local_iso(start),
+                "end_local": local_iso(end),
+                "distance_km": distance_km,
+                "duration_s": duration_s,
+                "pace_min_km": pace,
+                "avg_hr_bpm": avg_hr,
+                "max_hr_bpm": max_hr,
+            }
+        )
     return rows
 
 
@@ -281,9 +318,16 @@ def pace_fade(splits: list[dict]) -> float | None:
     return (total_s - elapsed) / half - elapsed / half
 
 
-def facts_row(s: Session, workout: dict, splits: list[dict], previous: list[dict]) -> dict[str, Any]:
-    full = [r for r in splits if r["distance_km"] is not None and r["distance_km"] >= FULL_KM
-            and r["pace_min_km"] is not None]
+def facts_row(
+    s: Session, workout: dict, splits: list[dict], previous: list[dict]
+) -> dict[str, Any]:
+    full = [
+        r
+        for r in splits
+        if r["distance_km"] is not None
+        and r["distance_km"] >= FULL_KM
+        and r["pace_min_km"] is not None
+    ]
     paces = [r["pace_min_km"] for r in full]
     typical = median(paces) if paces else None
     points = s.points or []
@@ -291,8 +335,7 @@ def facts_row(s: Session, workout: dict, splits: list[dict], previous: list[dict
     avg_hr = workout["avg_hr_bpm"]
     last = previous[-1]["avg_hr_bpm"] if previous else None
     start = s.primary.start
-    window = [w["avg_hr_bpm"] for w in previous
-              if timestamp_of(w) >= start - timedelta(days=28)]
+    window = [w["avg_hr_bpm"] for w in previous if timestamp_of(w) >= start - timedelta(days=28)]
     four_week = mean(window)
     return {
         "workout_id": s.primary.id,
@@ -307,8 +350,12 @@ def facts_row(s: Session, workout: dict, splits: list[dict], previous: list[dict
         "peak_hr_bpm": workout["peak_hr_bpm"],
         "gps_gap_total_s": gap_total,
         "walk_s": walk_seconds(points),
-        "avg_hr_delta_vs_previous_run_bpm": avg_hr - last if avg_hr is not None and last is not None else None,
-        "avg_hr_delta_vs_4wk_avg_bpm": avg_hr - four_week if avg_hr is not None and four_week is not None else None,
+        "avg_hr_delta_vs_previous_run_bpm": avg_hr - last
+        if avg_hr is not None and last is not None
+        else None,
+        "avg_hr_delta_vs_4wk_avg_bpm": avg_hr - four_week
+        if avg_hr is not None and four_week is not None
+        else None,
     }
 
 
@@ -319,27 +366,50 @@ def timestamp_of(workout: dict) -> datetime:
 def personal_bests(gps_runs: list[dict], splits: list[dict]) -> list[dict]:
     by_id = {w["id"]: w for w in gps_runs}
     rows = []
-    full = [r for r in splits if r["distance_km"] is not None and r["distance_km"] >= FULL_KM
-            and r["pace_min_km"] is not None]
+    full = [
+        r
+        for r in splits
+        if r["distance_km"] is not None
+        and r["distance_km"] >= FULL_KM
+        and r["pace_min_km"] is not None
+    ]
     if full:
         best = min(full, key=lambda r: (r["pace_min_km"], r["workout_id"], r["km_no"]))
-        rows.append({
-            "record": "best_1km_split", "target_km": 1.0, "workout_id": best["workout_id"],
-            "date": by_id[best["workout_id"]]["date"], "distance_km": best["distance_km"],
-            "duration_s": best["duration_s"], "pace_min_km": best["pace_min_km"],
-        })
+        rows.append(
+            {
+                "record": "best_1km_split",
+                "target_km": 1.0,
+                "workout_id": best["workout_id"],
+                "date": by_id[best["workout_id"]]["date"],
+                "distance_km": best["distance_km"],
+                "duration_s": best["duration_s"],
+                "pace_min_km": best["pace_min_km"],
+            }
+        )
     for label, target in PB_TARGETS_KM:
-        qualifying = [w for w in gps_runs if w["distance_km"] is not None and w["distance_km"] >= target
-                      and w["pace_min_km"] is not None]
+        qualifying = [
+            w
+            for w in gps_runs
+            if w["distance_km"] is not None
+            and w["distance_km"] >= target
+            and w["pace_min_km"] is not None
+        ]
         if not qualifying:
             continue
         best = min(qualifying, key=lambda w: (w["pace_min_km"], w["start_local"]))
-        rows.append({
-            "record": f"best_run_{label}", "target_km": target, "workout_id": best["id"],
-            "date": best["date"], "distance_km": best["distance_km"],
-            "duration_s": best["duration_min"] * 60 if best["duration_min"] is not None else None,
-            "pace_min_km": best["pace_min_km"],
-        })
+        rows.append(
+            {
+                "record": f"best_run_{label}",
+                "target_km": target,
+                "workout_id": best["id"],
+                "date": best["date"],
+                "distance_km": best["distance_km"],
+                "duration_s": best["duration_min"] * 60
+                if best["duration_min"] is not None
+                else None,
+                "pace_min_km": best["pace_min_km"],
+            }
+        )
     return rows
 
 

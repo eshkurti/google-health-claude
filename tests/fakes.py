@@ -76,4 +76,3 @@ class FakeClient:
         if isinstance(reply, HealthApiError):
             raise reply
         return reply
-

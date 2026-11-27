@@ -16,10 +16,11 @@ results are merged into what is stored, so nothing fetched before is ever erased
 from __future__ import annotations
 
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from .client import HealthApiError
@@ -104,7 +105,9 @@ def sample_key(data_type: str) -> Callable[[Any], str | None]:
 MERGE_KEYS: dict[str, Callable[[Any], str | None]] = {"weight": sample_key("weight")}
 
 
-def list_for_day(client: Any, spec: ListSpec, day: date, variant_cache: dict[str, int]) -> list[dict]:
+def list_for_day(
+    client: Any, spec: ListSpec, day: date, variant_cache: dict[str, int]
+) -> list[dict]:
     """List a day's points, trying the filter spellings until one is accepted."""
     return list_range(client, spec, day, day + timedelta(days=1), variant_cache)
 
@@ -164,7 +167,9 @@ def fetch_range(
     for spec in ROLLUP_SPECS:
         for window_start, window_end in chunks(start, end, spec.max_days):
             try:
-                points = client.daily_rollup(spec.data_type, window_start, window_end + timedelta(days=1))
+                points = client.daily_rollup(
+                    spec.data_type, window_start, window_end + timedelta(days=1)
+                )
             except HealthApiError as err:
                 record_error(spec.data_type, err)
                 break
@@ -220,7 +225,9 @@ def fetch_range(
     # whole window if longer) on every run, in one paginated call.
     weight_start = min(start, end - timedelta(days=WEIGHT_DAYS - 1))
     try:
-        points = list_range(client, WEIGHT_SPEC, weight_start, end + timedelta(days=1), variant_cache)
+        points = list_range(
+            client, WEIGHT_SPEC, weight_start, end + timedelta(days=1), variant_cache
+        )
     except HealthApiError as err:
         record_error(WEIGHT_SPEC.data_type, err)
     else:
