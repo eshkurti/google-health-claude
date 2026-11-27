@@ -6,9 +6,9 @@ from datetime import date
 import pytest
 from fakes import FakeResponse, FakeSession
 
+from google_health_claude.api.credentials import Credentials
 from google_health_claude.cli import build_parser
 from google_health_claude.client import HealthApiError, HealthClient
-from google_health_claude.credentials import Credentials
 from google_health_claude.probe_more import (
     GUESSED_TYPES,
     OTHER_TYPES,

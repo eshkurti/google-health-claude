@@ -9,9 +9,9 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from .api.credentials import CredentialsError, load_credentials
 from .client import AuthError, HealthClient
 from .config import TIMEZONE
-from .credentials import CredentialsError, load_credentials
 from .demo import DEFAULT_SEED, DEFAULT_WEEKS, MAX_WEEKS, MIN_WEEKS
 from .fetch import fetch_range
 

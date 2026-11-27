@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from google_health_claude.credentials import CredentialsError, load_credentials
+from google_health_claude.api.credentials import CredentialsError, load_credentials
 from google_health_claude.store import merge_items, write_if_changed
 
 
@@ -42,6 +42,32 @@ def test_missing_credentials_are_reported(tmp_path, monkeypatch):
         monkeypatch.delenv(name, raising=False)
     with pytest.raises(CredentialsError):
         load_credentials(None, tmp_path / "nope.json")
+
+
+@pytest.mark.parametrize(
+    ("secret_body", "token_body"),
+    [
+        ({"installed": {"client_id": "id"}}, {"refresh_token": "r"}),  # no client_secret
+        ({"installed": ["id", "s"]}, {"refresh_token": "r"}),  # section is not an object
+        ({"installed": {"client_id": 1, "client_secret": "s"}}, {"refresh_token": "r"}),
+        ([], {"refresh_token": "r"}),  # not a JSON object at all
+        ({"installed": {"client_id": "id", "client_secret": "s"}}, ["r"]),
+        ({"installed": {"client_id": "id", "client_secret": "s"}}, {"refresh_token": 5}),
+    ],
+    ids=["no-secret", "section-list", "id-number", "secret-list", "token-list", "token-number"],
+)
+def test_malformed_credential_files_are_credentials_errors(
+    tmp_path, monkeypatch, secret_body, token_body
+):
+    """The CLI turns CredentialsError into one line; anything else would be a traceback."""
+    for name in ("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REFRESH_TOKEN"):
+        monkeypatch.delenv(name, raising=False)
+    secret = tmp_path / "client_secret.json"
+    secret.write_text(json.dumps(secret_body))
+    token = tmp_path / "token.json"
+    token.write_text(json.dumps(token_body))
+    with pytest.raises(CredentialsError):
+        load_credentials(secret, token)
 
 
 def test_write_leaves_no_temporary_file(tmp_path):

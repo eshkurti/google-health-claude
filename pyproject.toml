@@ -100,7 +100,6 @@ module = [
     "google_health_claude.cli",
     "google_health_claude.client",
     "google_health_claude.config",
-    "google_health_claude.credentials",
     "google_health_claude.datatypes",
     "google_health_claude.fetch",
     "google_health_claude.probe",

@@ -21,15 +21,34 @@ class Credentials:
     refresh_token: str
 
 
+def _read_json(path: str | Path) -> object:
+    parsed: object = json.loads(Path(path).read_text(encoding="utf-8"))
+    return parsed
+
+
 def read_client_secret_file(path: str | Path) -> tuple[str, str]:
     """Return (client_id, client_secret) from a Google client JSON download."""
-    data = json.loads(Path(path).read_text(encoding="utf-8"))
-    section = data.get("installed") or data.get("web")
-    if not section:
+    data = _read_json(path)
+    section = (data.get("installed") or data.get("web")) if isinstance(data, dict) else None
+    if not isinstance(section, dict):
         raise CredentialsError(
             "Unrecognised client secret file: expected an 'installed' or 'web' section."
         )
-    return section["client_id"], section["client_secret"]
+    client_id, client_secret = section.get("client_id"), section.get("client_secret")
+    if not (isinstance(client_id, str) and isinstance(client_secret, str)):
+        raise CredentialsError(
+            "Unrecognised client secret file: client_id and client_secret must be strings."
+        )
+    return client_id, client_secret
+
+
+def read_refresh_token(path: Path) -> str | None:
+    """The refresh token saved by `auth`, or None if the file has none."""
+    data = _read_json(path)
+    token = data.get("refresh_token") if isinstance(data, dict) else None
+    if token is not None and not isinstance(token, str):
+        raise CredentialsError(f"Unrecognised token file {path}: refresh_token is not a string.")
+    return token
 
 
 def load_credentials(
@@ -51,7 +70,7 @@ def load_credentials(
     if not refresh_token:
         token_file = Path(token_path) if token_path else DEFAULT_TOKEN_FILE
         if token_file.exists():
-            refresh_token = json.loads(token_file.read_text(encoding="utf-8")).get("refresh_token")
+            refresh_token = read_refresh_token(token_file)
 
     missing = [
         name

@@ -4,8 +4,8 @@ import pytest
 import requests
 from fakes import FakeResponse, FakeSession, NotJsonResponse
 
+from google_health_claude.api.credentials import Credentials
 from google_health_claude.client import AuthError, HealthApiError, HealthClient
-from google_health_claude.credentials import Credentials
 
 CREDS = Credentials("id", "secret", "refresh")
 TOKEN = FakeResponse(200, {"access_token": "tok", "expires_in": 3599})

@@ -11,8 +11,8 @@ from urllib.parse import quote
 
 import requests
 
+from .api.credentials import Credentials
 from .config import API_BASE, TOKEN_URL
-from .credentials import Credentials
 
 
 class AuthError(RuntimeError):
