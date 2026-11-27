@@ -5,15 +5,16 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from collections.abc import Callable
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from .api.client import AuthError, HealthClient
+from .api.client import AuthError, HealthApi, HealthClient
 from .api.credentials import CredentialsError, load_credentials
 from .config import TIMEZONE
 from .demo import DEFAULT_SEED, DEFAULT_WEEKS, MAX_WEEKS, MIN_WEEKS
-from .fetch.run import fetch_range
+from .fetch.run import FetchReport, fetch_range
 
 
 def today() -> date:
@@ -136,72 +137,96 @@ def _warn(message: str) -> None:
     print(prefix + message, file=sys.stderr)
 
 
-def main(argv: list[str] | None = None) -> int:  # noqa: C901 - split in refactor session
+def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    return COMMANDS[args.command](args)
 
-    if args.command == "auth":
-        from .api.auth import run_auth
 
-        return run_auth(args.client_secret, args.token_file)
+Command = Callable[[argparse.Namespace], int]
+ClientCommand = Callable[[argparse.Namespace, HealthApi], int]
 
-    if args.command == "demo":
-        from .demo import generate
 
+def _with_client(run: ClientCommand) -> Command:
+    """Commands that call the API: load the credentials, turn setup errors into one line."""
+
+    def command(args: argparse.Namespace) -> int:
         try:
-            demo = generate(args.out, args.seed, args.weeks)
-        except ValueError as err:
+            client = HealthClient(load_credentials(args.client_secret, args.token_file))
+            return run(args, client)
+        except (CredentialsError, AuthError, FileNotFoundError) as err:
             print(f"error: {err}", file=sys.stderr)
             return 1
-        print(
-            f"Wrote {demo.files} files for {demo.first_day} .. {demo.as_of} "
-            f"({demo.workouts} workout records, {demo.nights} sleep sessions) to {args.out}. "
-            "Every value is invented.",
-            file=sys.stderr,
-        )
-        return 0
 
-    if args.command == "derive":
-        from .derive import derive
+    return command
 
-        try:
-            derive(args.data_dir, args.out, args.sqlite, args.as_of)
-        except (FileNotFoundError, ValueError) as err:
-            print(f"error: {err}", file=sys.stderr)
-            return 1
-        return 0
+
+def _auth(args: argparse.Namespace) -> int:
+    from .api.auth import run_auth
+
+    return run_auth(args.client_secret, args.token_file)
+
+
+def _demo(args: argparse.Namespace) -> int:
+    from .demo import generate
 
     try:
-        client = HealthClient(load_credentials(args.client_secret, args.token_file))
-
-        if args.command == "probe":
-            from .devtools.probe import probe
-
-            day = args.date or today() - timedelta(days=1)
-            return 1 if probe(client, day, args.save_samples) else 0
-
-        if args.command == "probe-tcx":
-            from .devtools.probe_tcx import probe_tcx
-
-            return 1 if probe_tcx(client, args.data_dir, args.save_samples) else 0
-
-        if args.command == "probe-more":
-            from .devtools.probe_more import probe_more
-
-            return 1 if probe_more(client, args.data_dir, today()) else 0
-
-        if args.command == "fetch":
-            end = args.end or today()
-            start = end - timedelta(days=max(args.days, 1) - 1)
-            report = fetch_range(client, start, end, args.data_dir)
-        else:
-            end = args.until or today() - timedelta(days=1)
-            report = fetch_range(
-                client, args.since, end, args.data_dir, skip_existing=not args.force
-            )
-    except (CredentialsError, AuthError, FileNotFoundError) as err:
+        demo = generate(args.out, args.seed, args.weeks)
+    except ValueError as err:
         print(f"error: {err}", file=sys.stderr)
         return 1
+    print(
+        f"Wrote {demo.files} files for {demo.first_day} .. {demo.as_of} "
+        f"({demo.workouts} workout records, {demo.nights} sleep sessions) to {args.out}. "
+        "Every value is invented.",
+        file=sys.stderr,
+    )
+    return 0
 
+
+def _derive(args: argparse.Namespace) -> int:
+    from .derive import derive
+
+    try:
+        derive(args.data_dir, args.out, args.sqlite, args.as_of)
+    except (FileNotFoundError, ValueError) as err:
+        print(f"error: {err}", file=sys.stderr)
+        return 1
+    return 0
+
+
+def _probe(args: argparse.Namespace, client: HealthApi) -> int:
+    from .devtools.probe import probe
+
+    day = args.date or today() - timedelta(days=1)
+    return 1 if probe(client, day, args.save_samples) else 0
+
+
+def _probe_tcx(args: argparse.Namespace, client: HealthApi) -> int:
+    from .devtools.probe_tcx import probe_tcx
+
+    return 1 if probe_tcx(client, args.data_dir, args.save_samples) else 0
+
+
+def _probe_more(args: argparse.Namespace, client: HealthApi) -> int:
+    from .devtools.probe_more import probe_more
+
+    return 1 if probe_more(client, args.data_dir, today()) else 0
+
+
+def _fetch(args: argparse.Namespace, client: HealthApi) -> int:
+    end = args.end or today()
+    start = end - timedelta(days=max(args.days, 1) - 1)
+    return _report_fetch(client, fetch_range(client, start, end, args.data_dir))
+
+
+def _backfill(args: argparse.Namespace, client: HealthApi) -> int:
+    end = args.until or today() - timedelta(days=1)
+    report = fetch_range(client, args.since, end, args.data_dir, skip_existing=not args.force)
+    return _report_fetch(client, report)
+
+
+def _report_fetch(client: HealthApi, report: FetchReport) -> int:
+    """Warnings for the Actions log; fail only if not a single request worked."""
     if client.refresh_token_expires_in is not None:
         print(f"refresh_token_expires_in = {client.refresh_token_expires_in}", file=sys.stderr)
     for data_type, message in sorted(report.errors.items()):
@@ -212,3 +237,15 @@ def main(argv: list[str] | None = None) -> int:  # noqa: C901 - split in refacto
         print("error: every request failed, nothing was fetched.", file=sys.stderr)
         return 1
     return 0
+
+
+COMMANDS: dict[str, Command] = {
+    "auth": _auth,
+    "demo": _demo,
+    "derive": _derive,
+    "probe": _with_client(_probe),
+    "probe-tcx": _with_client(_probe_tcx),
+    "probe-more": _with_client(_probe_more),
+    "fetch": _with_client(_fetch),
+    "backfill": _with_client(_backfill),
+}

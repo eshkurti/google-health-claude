@@ -124,3 +124,9 @@ def test_workflow_command_lines_parse(argv: list[str]) -> None:
     args = build_parser().parse_args(argv)
     assert args.command == argv[0]
     assert args.data_dir == Path("data")
+
+
+def test_every_subcommand_has_a_handler() -> None:
+    from google_health_claude.cli import COMMANDS
+
+    assert set(COMMANDS) == set(_subcommands())
