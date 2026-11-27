@@ -14,13 +14,13 @@ from pathlib import Path
 
 import pytest
 
-from google_health_claude import fetch
 from google_health_claude.cli import main
 from google_health_claude.demo import DEFAULT_WEEKS, MIN_WEEKS, generate
 from google_health_claude.demo.route import ANCHOR_LAT, ANCHOR_LON
 from google_health_claude.derive import derive
 from google_health_claude.derive.points import read_points
 from google_health_claude.derive.values import TZ, timestamp
+from google_health_claude.fetch import run as fetch
 from google_health_claude.records import tcx_eligible
 from google_health_claude.store import load_json
 from google_health_claude.workout_tcx import INDEX_NAME, gzip_bytes

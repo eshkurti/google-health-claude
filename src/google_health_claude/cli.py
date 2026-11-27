@@ -13,7 +13,7 @@ from .api.client import AuthError, HealthClient
 from .api.credentials import CredentialsError, load_credentials
 from .config import TIMEZONE
 from .demo import DEFAULT_SEED, DEFAULT_WEEKS, MAX_WEEKS, MIN_WEEKS
-from .fetch import fetch_range
+from .fetch.run import fetch_range
 
 
 def today() -> date:

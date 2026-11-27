@@ -19,7 +19,7 @@ from typing import Any
 
 from .api.client import HealthApiError
 from .datatypes import LIST_SPECS, ROLLUP_SPECS
-from .fetch import list_for_day
+from .fetch.run import list_for_day
 from .tcx import TARGETS, Workout, load_workouts, pick_workouts, summarize_tcx
 
 
