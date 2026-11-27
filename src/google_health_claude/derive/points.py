@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import gzip
 import xml.etree.ElementTree as ET
+import zlib
 from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import datetime
@@ -51,7 +52,7 @@ def read_points(path: Path) -> list[Point] | None:
     """Trackpoints of a gzipped TCX file, sorted by time; None if unreadable."""
     try:
         root = ET.fromstring(gzip.decompress(Path(path).read_bytes()))  # noqa: S314 - ElementTree never loads external entities and expat >= 2.4.1 refuses entity-expansion attacks; test_xml_entity_attacks_are_refused checks both
-    except (OSError, EOFError, ET.ParseError):
+    except (OSError, EOFError, zlib.error, ET.ParseError):  # zlib.error: broken deflate stream
         return None
     by_time: dict[float, Point] = {}
     for tp in root.iter():

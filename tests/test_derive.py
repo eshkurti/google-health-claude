@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import gzip
 import math
 import sqlite3
 from contextlib import closing
@@ -191,6 +192,27 @@ def test_heart_rate_is_time_weighted_with_irregular_sampling(run):
     assert avg == pytest.approx(115, abs=0.5)  # 100 held 3 s, 160 held 1 s
     assert plain_mean == pytest.approx(130, abs=0.5)
     assert peak == 160
+
+
+def corrupt_gzip(content: bytes) -> bytes:
+    """A gzip file with an intact header whose deflate stream is broken (zlib.error)."""
+    good = gzip.compress(content, mtime=0)
+    return good[:10] + bytes([0xFF]) + good[11:]
+
+
+def test_tcx_with_a_corrupt_deflate_stream_is_unreadable(tmp_path):
+    path = tmp_path / "broken.tcx.gz"
+    path.write_bytes(corrupt_gzip(b"<TrainingCenterDatabase/>"))
+    assert read_points(path) is None
+
+
+def test_corrupt_tcx_gives_a_warning_not_a_crash(tmp_path):
+    data = tmp_path / "data"
+    build_dataset(data)
+    tcx = data / "tcx" / "2026-11-15" / "runA.tcx.gz"
+    tcx.write_bytes(corrupt_gzip(gzip.decompress(tcx.read_bytes())))
+    report = derive(data, tmp_path / "out", as_of=AS_OF, log=lambda m: None)
+    assert report.warnings == ["unreadable TCX for the RUNNING workout on 2026-11-15"]
 
 
 # -- days -------------------------------------------------------------------------------------
