@@ -1,4 +1,4 @@
-"""Command line: auth | probe | probe-tcx | probe-more | fetch | backfill | derive."""
+"""Command line: auth | probe | probe-tcx | probe-more | fetch | backfill | derive | demo."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 from .client import AuthError, HealthClient
 from .config import TIMEZONE
 from .credentials import CredentialsError, load_credentials
+from .demo import DEFAULT_SEED, DEFAULT_WEEKS, MAX_WEEKS, MIN_WEEKS
 from .fetch import fetch_range
 
 
@@ -107,6 +108,26 @@ def build_parser() -> argparse.ArgumentParser:
         type=_date,
         help="date of the last fetch; it and the 2 days before are partial (default: from _meta.json)",
     )
+
+    p_demo = sub.add_parser(
+        "demo",
+        help="write invented raw data (a beginner's marathon build) in fetch's layout; no network",
+    )
+    p_demo.add_argument(
+        "--out", type=Path, required=True, help="new or empty folder for the raw files"
+    )
+    p_demo.add_argument(
+        "--seed",
+        type=int,
+        default=DEFAULT_SEED,
+        help=f"same seed, same bytes (default {DEFAULT_SEED})",
+    )
+    p_demo.add_argument(
+        "--weeks",
+        type=int,
+        default=DEFAULT_WEEKS,
+        help=f"training weeks from Monday 2026-10-05, {MIN_WEEKS}-{MAX_WEEKS} (default {DEFAULT_WEEKS})",
+    )
     return parser
 
 
@@ -122,6 +143,22 @@ def main(argv: list[str] | None = None) -> int:  # noqa: C901 - split in refacto
         from .auth import run_auth
 
         return run_auth(args.client_secret, args.token_file)
+
+    if args.command == "demo":
+        from .demo import generate
+
+        try:
+            demo = generate(args.out, args.seed, args.weeks)
+        except ValueError as err:
+            print(f"error: {err}", file=sys.stderr)
+            return 1
+        print(
+            f"Wrote {demo.files} files for {demo.first_day} .. {demo.as_of} "
+            f"({demo.workouts} workout records, {demo.nights} sleep sessions) to {args.out}. "
+            "Every value is invented.",
+            file=sys.stderr,
+        )
+        return 0
 
     if args.command == "derive":
         from .derive import derive
