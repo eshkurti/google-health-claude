@@ -25,7 +25,7 @@ dev = [
     "ruff>=0.17.6,<0.18",
     "mypy>=2.4.1,<2.5",
     "types-requests>=2.33",
-    "pre-commit>=4.7",
+    "pre-commit>=4.6",  # 4.7 needs Python 3.11
 ]
 
 [tool.setuptools.packages.find]
