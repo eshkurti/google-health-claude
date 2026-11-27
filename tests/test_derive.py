@@ -16,9 +16,9 @@ import pytest
 from derive_fixtures import AS_OF, COORD_MARKERS, build_dataset, read_points
 
 from google_health_claude.cli import main
-from google_health_claude.derive import derive
-from google_health_claude.derive.days import OUTLIER_RULES, OutlierRule, outlier_flags
-from google_health_claude.derive.load import TcxFile, load
+from google_health_claude.derive import as_of_from, build_tables, derive
+from google_health_claude.derive.days import OUTLIER_RULES, OutlierRule, dated, outlier_flags
+from google_health_claude.derive.load import JsonFile, TcxFile, load
 from google_health_claude.derive.output import cell
 from google_health_claude.derive.points import Point, hr_stats, segment_altitudes
 from google_health_claude.derive.schema import TABLES
@@ -242,6 +242,33 @@ def test_build_workouts_works_on_loaded_data_without_the_folder(tmp_path):
     tables = build_workouts(unreadable, warnings.append)
     assert warnings == ["unreadable TCX for the RUNNING workout on 2026-11-15"]
     assert by(tables.workouts, "id")["runA"]["has_gps"] is False
+
+
+def test_build_tables_works_on_loaded_data_without_the_folder(run, tmp_path):
+    data = tmp_path / "data"
+    build_dataset(data)
+    raw = load(data)
+    shutil.rmtree(data)
+    tables = build_tables(raw, AS_OF, lambda m: None, points=True)
+    assert {name: len(rows) for name, rows in tables.items()} == run["report"].rows
+    assert "exercise_points" not in build_tables(raw, AS_OF, lambda m: None)
+
+
+def test_as_of_is_the_berlin_date_of_the_last_fetch():
+    assert as_of_from("2026-11-22T23:30:00Z") == date(2026, 11, 23)  # 00:30 in Berlin
+    assert as_of_from("2026-11-23T04:10:00Z") == date(2026, 11, 23)
+    assert as_of_from(None) is None
+    assert as_of_from("2026-11-23T04:10:00") is None  # no offset: not a moment
+    assert as_of_from(20261123) is None
+
+
+def test_day_tables_use_files_named_after_a_date_with_an_object_body():
+    files = (
+        JsonFile("2026-11-01", {"metrics": {}}),
+        JsonFile("2026-11-02", ["not", "an", "object"]),
+        JsonFile("notes", {"metrics": {}}),
+    )
+    assert dated(files) == {date(2026, 11, 1): {"metrics": {}}}
 
 
 # -- days -------------------------------------------------------------------------------------

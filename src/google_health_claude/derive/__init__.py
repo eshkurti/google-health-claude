@@ -1,21 +1,23 @@
 """Derive analysis tables (CSV, optional SQLite) from the raw fetched files.
 
-Reads ``daily/``, ``sleep/``, ``workouts/``, ``tcx/<date>/<id>.tcx.gz`` and
-``_meta.json`` from the data folder and never writes there. No output contains
-coordinates: TCX positions are only checked for presence.
+``derive`` is three steps: ``load.load`` reads ``daily/``, ``sleep/``,
+``workouts/``, ``tcx/<date>/<id>.tcx.gz`` and ``_meta.json`` (and never writes to
+the data folder), ``build_tables`` turns them into rows without any I/O, and
+``output`` writes the CSV and SQLite files. No output contains coordinates: TCX
+positions are only checked for presence.
 """
 
 from __future__ import annotations
 
-import json
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
+from typing import Any
 
 from .days import build_days
-from .load import load, resolve_data_dir
+from .load import RawData, load, resolve_data_dir
 from .output import ensure_notes, read_notes, write_csvs, write_sqlite
 from .values import TZ, timestamp
 from .workouts import build_workouts
@@ -30,14 +32,27 @@ class DeriveReport:
     warnings: list[str] = field(default_factory=list)
 
 
-def default_as_of(data_dir: Path) -> date:
-    """The Berlin date of the last fetch (days up to it may still change); else today."""
-    meta_path = Path(data_dir) / "_meta.json"
-    if meta_path.exists():
-        moment = timestamp(json.loads(meta_path.read_text(encoding="utf-8")).get("last_fetch_utc"))
-        if moment is not None:
-            return moment.astimezone(TZ).date()
-    return datetime.now(TZ).date()
+def as_of_from(last_fetch_utc: Any) -> date | None:
+    """The Berlin date of the last fetch (days up to it may still change), if it is known."""
+    moment = timestamp(last_fetch_utc)
+    return None if moment is None else moment.astimezone(TZ).date()
+
+
+def build_tables(
+    raw: RawData, as_of: date, warn: Callable[[str], None], points: bool = False
+) -> dict[str, list[dict[str, Any]]]:
+    """Every table's rows from the loaded files; ``points`` adds exercise_points (large)."""
+    workouts = build_workouts(raw, warn)
+    tables = {
+        "workouts": workouts.workouts,
+        "run_splits": workouts.run_splits,
+        "run_facts": workouts.run_facts,
+        "personal_bests": workouts.personal_bests,
+        **build_days(raw, workouts, as_of),
+    }
+    if points:
+        tables["exercise_points"] = workouts.exercise_points()
+    return tables
 
 
 def derive(
@@ -55,21 +70,14 @@ def derive(
             or data_dir.resolve() in Path(target).resolve().parents
         ):
             raise ValueError(f"{label} must not be inside the data folder")
-    as_of = as_of or default_as_of(data_dir)
+    raw = load(data_dir)
+    as_of = as_of or as_of_from(raw.last_fetch_utc) or datetime.now(TZ).date()
     report = DeriveReport(as_of=as_of)
 
-    workouts = build_workouts(load(data_dir), report.warnings.append)
-    tables = {
-        "workouts": workouts.workouts,
-        "run_splits": workouts.run_splits,
-        "run_facts": workouts.run_facts,
-        "personal_bests": workouts.personal_bests,
-        **build_days(data_dir, workouts, as_of),
-    }
+    tables = build_tables(raw, as_of, report.warnings.append, points=sqlite_path is not None)
     report.files_changed = write_csvs(out_dir, tables)
     report.notes_created = ensure_notes(out_dir)
     if sqlite_path is not None:
-        tables["exercise_points"] = workouts.exercise_points()
         write_sqlite(sqlite_path, tables, read_notes(out_dir))
     report.rows = {name: len(rows) for name, rows in tables.items()}
 

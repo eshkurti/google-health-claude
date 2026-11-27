@@ -7,15 +7,15 @@ day-based tables cover fetched days, i.e. days with any data besides weight.
 
 from __future__ import annotations
 
-import json
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from math import fsum
-from pathlib import Path
 from statistics import median
 from typing import Any
 
 from ..records import exercise_id
+from .load import JsonFile, RawData
 from .values import (
     dig,
     local_date,
@@ -78,16 +78,16 @@ EXPECTED_DAILY = (
 )
 
 
-def load_days(data_dir: Path, category: str) -> dict[date, dict[str, Any]]:
+def dated(files: Iterable[JsonFile]) -> dict[date, dict[str, Any]]:
+    """The files named after a date whose body is an object, by that date."""
     days = {}
-    for path in sorted((Path(data_dir) / category).glob("*.json")):
+    for file in files:
         try:
-            day = date.fromisoformat(path.stem)
+            day = date.fromisoformat(file.stem)
         except ValueError:
             continue
-        body = json.loads(path.read_text(encoding="utf-8"))
-        if isinstance(body, dict):
-            days[day] = body
+        if isinstance(file.body, dict):
+            days[day] = file.body
     return days
 
 
@@ -364,10 +364,11 @@ def outlier_flags(series: dict[date, float], rule: OutlierRule) -> dict[date, bo
 
 
 def build_days(
-    data_dir: Path, workouts: WorkoutTables, as_of: date
+    raw: RawData, workouts: WorkoutTables, as_of: date
 ) -> dict[str, list[dict[str, Any]]]:
-    daily_files = load_days(data_dir, "daily")
-    nights = load_days(data_dir, "sleep")
+    """The day-level tables from the loaded files; reads nothing itself."""
+    daily_files = dated(raw.daily)
+    nights = dated(raw.sleep)
     workout_days = {date.fromisoformat(w["date"]) for w in workouts.workouts}
 
     def fetched(day: date) -> bool:
