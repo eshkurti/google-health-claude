@@ -11,8 +11,8 @@ from fakes import FakeClient
 from google_health_claude import cli
 from google_health_claude.api.client import HealthApiError, RawReply
 from google_health_claude.fetch.run import fetch_range
+from google_health_claude.fetch.tcx import gzip_bytes
 from google_health_claude.records import tcx_eligible
-from google_health_claude.workout_tcx import gzip_bytes
 
 DAY = date(2026, 1, 8)
 # Invented placeholder coordinates (open ocean); tests check they are never logged.

@@ -26,10 +26,10 @@ from zoneinfo import ZoneInfo
 from ..api.client import HealthApiError
 from ..config import TIMEZONE
 from ..records import civil_date, parse_time
-from ..workout_tcx import TcxReport, export_tcx_for_days
 from .datatypes import LIST_SPECS, ROLLUP_SPECS, WEIGHT_DAYS, WEIGHT_SPEC, camel
 from .lists import list_for_day, list_range
 from .store import day_path, load_json, merge_items, write_if_changed
+from .tcx import TcxReport, export_tcx_for_days
 
 Log = Callable[[str], None]
 

@@ -20,7 +20,8 @@ from typing import Any
 from .api.client import HealthApiError
 from .fetch.datatypes import LIST_SPECS, ROLLUP_SPECS
 from .fetch.lists import list_for_day
-from .tcx import TARGETS, Workout, load_workouts, pick_workouts, summarize_tcx
+from .fetch.tcx import summarize_tcx
+from .tcx import TARGETS, Workout, load_workouts, pick_workouts
 
 
 def probe(client: Any, day: date, save_dir: Path | None = None) -> int:  # noqa: C901 - split in refactor session

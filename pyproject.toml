@@ -99,7 +99,6 @@ module = [
     "google_health_claude.probe",
     "google_health_claude.probe_more",
     "google_health_claude.tcx",
-    "google_health_claude.workout_tcx",
 ]
 disallow_any_generics = false
 disallow_subclassing_any = false

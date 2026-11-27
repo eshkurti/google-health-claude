@@ -47,7 +47,7 @@ from zoneinfo import ZoneInfo
 
 from ..config import TIMEZONE
 from ..fetch.store import day_path, write_bytes_if_changed, write_if_changed
-from ..workout_tcx import INDEX_NAME, gzip_bytes, tcx_path
+from ..fetch.tcx import INDEX_NAME, gzip_bytes, tcx_path
 from . import shapes
 from .route import RunPlan, simulate_run
 from .shapes import JsonDict, Span, Trackpoint

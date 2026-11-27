@@ -1,18 +1,14 @@
-"""Helpers for `probe-tcx`: pick sample workouts and summarise a TCX file.
+"""Helpers for `probe-tcx`: pick sample workouts from the stored workout files.
 
-Nothing here touches the network. The summary holds only counts, time intervals
-and XML tag names, never values such as coordinates or heart rates, so it is
-safe to print and paste.
+Nothing here touches the network. The TCX summary it prints comes from
+fetch/tcx.py, which also uses it to count trackpoints before storing a file.
 """
 
 from __future__ import annotations
 
 import json
-import statistics
-import xml.etree.ElementTree as ET
 from collections.abc import Callable
-from dataclasses import dataclass, field
-from datetime import datetime
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -128,64 +124,3 @@ def pick_workouts(stored: list[tuple[str, dict[str, Any]]]) -> dict[str, Workout
             str(interval.get("endTime") or ""),
         )
     return picked
-
-
-# -- TCX summary ----------------------------------------------------------------
-
-
-def _local(tag: str) -> str:
-    return tag.rsplit("}", 1)[-1]
-
-
-@dataclass
-class TcxSummary:
-    trackpoints: int = 0
-    with_heart_rate: int = 0
-    with_position: int = 0
-    with_altitude: int = 0
-    intervals_s: list[float] = field(default_factory=list)
-    tags: list[str] = field(default_factory=list)
-    error: str | None = None
-
-    def interval_text(self) -> str:
-        if not self.intervals_s:
-            return "n/a (fewer than two timed trackpoints)"
-        values = self.intervals_s
-        return (
-            f"median {statistics.median(values):g}s, min {min(values):g}s, "
-            f"max {max(values):g}s over {len(values)} gaps"
-        )
-
-
-def summarize_tcx(content: bytes) -> TcxSummary:
-    summary = TcxSummary()
-    if not content.strip():
-        summary.error = "empty body"
-        return summary
-    try:
-        root = ET.fromstring(content)  # noqa: S314 - ElementTree never loads external entities and expat >= 2.4.1 refuses entity-expansion attacks; test_xml_entity_attacks_are_refused checks both
-    except ET.ParseError as err:
-        # The position in the message is line/column only, never body content.
-        line, column = err.position
-        summary.error = f"not valid XML (line {line}, column {column})"
-        return summary
-
-    summary.tags = sorted({_local(el.tag) for el in root.iter() if isinstance(el.tag, str)})
-    previous: datetime | None = None
-    for point in root.iter():
-        if not isinstance(point.tag, str) or _local(point.tag) != "Trackpoint":
-            continue
-        summary.trackpoints += 1
-        children = {
-            _local(c.tag): c for c in point.iter() if isinstance(c.tag, str) and c is not point
-        }
-        summary.with_heart_rate += "HeartRateBpm" in children
-        summary.with_position += "Position" in children
-        summary.with_altitude += "AltitudeMeters" in children
-        time_el = children.get("Time")
-        current = parse_time(time_el.text) if time_el is not None else None
-        if current and previous:
-            summary.intervals_s.append((current - previous).total_seconds())
-        if current:
-            previous = current
-    return summary

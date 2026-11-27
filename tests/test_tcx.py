@@ -10,9 +10,10 @@ from google_health_claude.api.client import HealthClient
 from google_health_claude.api.credentials import Credentials
 from google_health_claude.cli import build_parser
 from google_health_claude.derive.points import read_points
+from google_health_claude.fetch.tcx import summarize_tcx
 from google_health_claude.probe import probe_tcx
 from google_health_claude.records import exercise_id
-from google_health_claude.tcx import load_workouts, pick_workouts, summarize_tcx
+from google_health_claude.tcx import load_workouts, pick_workouts
 
 # Distinctive invented coordinates: the tests assert they are never printed.
 LAT, LON = "12.3456789", "98.7654321"
@@ -242,7 +243,7 @@ def test_cli_probe_tcx_arguments():
 
 
 def test_xml_entity_attacks_are_refused(tmp_path):
-    """Backs the S314 noqa in tcx.py and derive/points.py on every Python CI runs.
+    """Backs the S314 noqa in fetch/tcx.py and derive/points.py on every Python CI runs.
 
     ElementTree must not read an external entity, and expat must stop exponential
     entity expansion (billion laughs) before it allocates the expanded text.
