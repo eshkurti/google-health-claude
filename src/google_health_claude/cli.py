@@ -1,13 +1,16 @@
-"""Command line: auth | probe | probe-tcx | probe-more | fetch | backfill | derive | demo."""
+"""Command line: auth | probe | probe-tcx | probe-more | fetch | backfill | derive | demo | query."""
 
 from __future__ import annotations
 
 import argparse
+import dataclasses
+import json
 import os
 import sys
 from collections.abc import Callable
 from datetime import date, datetime, timedelta
 from pathlib import Path
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from .api.client import AuthError, HealthApi, HealthClient
@@ -129,7 +132,35 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_WEEKS,
         help=f"training weeks from Monday 2026-10-05, {MIN_WEEKS}-{MAX_WEEKS} (default {DEFAULT_WEEKS})",
     )
+
+    p_query = sub.add_parser(
+        "query", help="print derived tables as JSON, filtered by date; reads only derive's output"
+    )
+    tables = p_query.add_subparsers(dest="table", required=True)
+    for name, text in QUERY_TABLES.items():
+        q = tables.add_parser(name, help=text)
+        q.add_argument(
+            "--derived", type=Path, required=True, help="the folder derive wrote (its --out)"
+        )
+        if name in RANGED_QUERIES:
+            q.add_argument("--start", type=_date, help="first day, inclusive (default: the first)")
+            q.add_argument("--end", type=_date, help="last day, inclusive (default: the last)")
+        if name == "freshness":
+            q.add_argument(
+                "--meta", type=Path, help="_meta.json of the data folder, for last_fetch_utc"
+            )
     return parser
+
+
+QUERY_TABLES = {
+    "daily": "one row per day",
+    "sleep": "sleep sessions by wake-up date, with stages and is_partial",
+    "runs": "RUNNING workouts with facts, splits and is_partial",
+    "weekly": "Monday-to-Sunday weeks that overlap the range",
+    "pbs": "personal bests",
+    "freshness": "first and last day, partial days and (with --meta) the last fetch time",
+}
+RANGED_QUERIES = ("daily", "sleep", "runs", "weekly")
 
 
 def _warn(message: str) -> None:
@@ -194,6 +225,30 @@ def _derive(args: argparse.Namespace) -> int:
     return 0
 
 
+def _query(args: argparse.Namespace) -> int:
+    from .query import HealthData
+
+    data = HealthData(args.derived, getattr(args, "meta", None))
+    answers: dict[str, Callable[[], Any]] = {
+        "daily": lambda: data.daily(args.start, args.end),
+        "sleep": lambda: data.sleep(args.start, args.end),
+        "runs": lambda: data.runs(args.start, args.end),
+        "weekly": lambda: data.weekly(args.start, args.end),
+        "pbs": data.personal_bests,
+        "freshness": data.freshness,
+    }
+    try:
+        answer = answers[args.table]()
+    except (FileNotFoundError, ValueError) as err:
+        print(f"error: {err}", file=sys.stderr)
+        return 1
+    if isinstance(answer, list):
+        print(json.dumps([dataclasses.asdict(row) for row in answer], indent=2))
+    else:
+        print(json.dumps(dataclasses.asdict(answer), indent=2))
+    return 0
+
+
 def _probe(args: argparse.Namespace, client: HealthApi) -> int:
     from .devtools.probe import probe
 
@@ -243,6 +298,7 @@ COMMANDS: dict[str, Command] = {
     "auth": _auth,
     "demo": _demo,
     "derive": _derive,
+    "query": _query,
     "probe": _with_client(_probe),
     "probe-tcx": _with_client(_probe_tcx),
     "probe-more": _with_client(_probe_more),

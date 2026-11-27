@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import json
 import shutil
 import typing
 from datetime import date
@@ -10,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+from google_health_claude.cli import build_parser, main
 from google_health_claude.derive.output import csv_text
 from google_health_claude.derive.schema import DAILY, TABLES, WEIGHT
 from google_health_claude.query import Freshness, HealthData
@@ -232,3 +234,70 @@ def test_tables_with_only_a_header_give_empty_answers(tmp_path: Path) -> None:
     health = HealthData(tmp_path)
     assert health.daily() == health.sleep() == health.runs() == health.weekly() == []
     assert health.freshness() == Freshness(None, None, None, (), None)
+
+
+# -- the query command ------------------------------------------------------------------
+
+
+def query(capsys: pytest.CaptureFixture[str], *argv: str) -> tuple[int, object, str]:
+    code = main(["query", *argv])
+    out, err = capsys.readouterr()
+    return code, json.loads(out) if out else None, err
+
+
+def test_query_daily_prints_json_rows(capsys: pytest.CaptureFixture[str]) -> None:
+    code, rows, _ = query(
+        capsys, "daily", "--derived", str(EXPECTED), "--start", "2026-10-05", "--end", "2026-10-06"
+    )
+    assert code == 0 and [r["date"] for r in rows] == ["2026-10-05", "2026-10-06"]
+    assert rows[0]["steps"] == 12064 and rows[0]["is_partial"] is False
+    assert list(rows[0]) == DAILY.names
+
+
+def test_query_runs_sleep_weekly_and_pbs(capsys: pytest.CaptureFixture[str]) -> None:
+    derived = ("--derived", str(EXPECTED))
+    _, runs, _ = query(capsys, "runs", *derived, "--start", "2026-10-25")
+    assert [(r["workout"]["id"], r["is_partial"], len(r["splits"])) for r in runs] == [
+        ("run-20261025", True, 14)
+    ]
+    assert runs[0]["facts"]["distance_km"] == 13.124
+    _, nights, _ = query(capsys, "sleep", *derived, "--end", "2026-10-05")
+    assert [n["sleep"]["id"] for n in nights] == ["sleep-20261005"]
+    _, weeks, _ = query(capsys, "weekly", *derived)
+    assert len(weeks) == 4
+    _, bests, _ = query(capsys, "pbs", *derived)
+    assert [b["record"] for b in bests] == ["best_1km_split", "best_run_5k", "best_run_10k"]
+
+
+def test_query_freshness_with_meta(capsys: pytest.CaptureFixture[str]) -> None:
+    _, without, _ = query(capsys, "freshness", "--derived", str(EXPECTED))
+    _, with_meta, _ = query(capsys, "freshness", "--derived", str(EXPECTED), "--meta", str(META))
+    assert without["last_fetch_utc"] is None
+    assert with_meta == {**without, "last_fetch_utc": "2026-10-26T04:10:00Z"}
+    assert with_meta["partial_days"] == ["2026-10-24", "2026-10-25", "2026-10-26"]
+
+
+def test_query_errors_are_one_line(capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
+    code, out, err = query(
+        capsys, "weekly", "--derived", str(EXPECTED), "--start", "2026-10-06", "--end", "2026-10-05"
+    )
+    assert (code, out, err) == (1, None, "error: start 2026-10-06 is after end 2026-10-05\n")
+    code, out, err = query(capsys, "daily", "--derived", str(tmp_path / "missing"))
+    assert code == 1 and out is None and err.startswith("error: ")
+
+
+def test_query_options_per_table() -> None:
+    parser = build_parser()
+    for table in ("daily", "sleep", "runs", "weekly"):
+        args = parser.parse_args(["query", table, "--derived", "d", "--start", "2026-10-05"])
+        assert (args.derived, args.start, args.end) == (Path("d"), d("2026-10-05"), None)
+    assert vars(parser.parse_args(["query", "pbs", "--derived", "d"])) == {
+        "command": "query",
+        "table": "pbs",
+        "derived": Path("d"),
+    }
+    args = parser.parse_args(["query", "freshness", "--derived", "d", "--meta", "m.json"])
+    assert args.meta == Path("m.json")
+    for argv in (["query", "pbs", "--derived", "d", "--start", "2026-10-05"], ["query", "daily"]):
+        with pytest.raises(SystemExit):
+            parser.parse_args(argv)
