@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from ..api.client import HealthApiError
+from ..api.client import HealthApi, HealthApiError
 from ..config import TIMEZONE
 from ..records import civil_date, parse_time
 from .datatypes import LIST_SPECS, ROLLUP_SPECS, WEIGHT_DAYS, WEIGHT_SPEC, camel
@@ -50,6 +50,24 @@ class FetchReport:
     errors: dict[str, str] = field(default_factory=dict)
     tcx: TcxReport = field(default_factory=TcxReport)
 
+    def record_error(self, data_type: str, err: Exception) -> None:
+        self.requests_failed += 1
+        self.errors.setdefault(data_type, str(err))
+
+
+Points = list[dict[str, Any]]
+
+
+@dataclass
+class _Collected:
+    """What this run fetched, before it is merged into the stored files."""
+
+    metrics: dict[date, dict[str, Any]]  # day -> data type -> rollup point or listed points
+    sleep: dict[date, Points] = field(default_factory=dict)
+    workouts: dict[date, Points] = field(default_factory=dict)
+    attempted: set[date] = field(default_factory=set)  # days whose per-day lists were asked for
+    incomplete: set[date] = field(default_factory=set)  # ... and failed for a transient reason
+
 
 def days_between(start: date, end: date) -> list[date]:
     return [start + timedelta(days=i) for i in range((end - start).days + 1)]
@@ -57,7 +75,7 @@ def days_between(start: date, end: date) -> list[date]:
 
 def chunks(start: date, end: date, size: int) -> list[tuple[date, date]]:
     """Split [start, end] (inclusive) into consecutive windows of at most ``size`` days."""
-    result = []
+    result: list[tuple[date, date]] = []
     cursor = start
     while cursor <= end:
         last = min(cursor + timedelta(days=size - 1), end)
@@ -66,13 +84,13 @@ def chunks(start: date, end: date, size: int) -> list[tuple[date, date]]:
     return result
 
 
-def _sample_time(point: Any, data_type: str) -> dict:
+def _sample_time(point: object, data_type: str) -> dict[str, Any]:
     payload = point.get(camel(data_type)) if isinstance(point, dict) else None
     sample = payload.get("sampleTime") if isinstance(payload, dict) else None
     return sample if isinstance(sample, dict) else {}
 
 
-def sample_day(point: Any, data_type: str) -> date | None:
+def sample_day(point: object, data_type: str) -> date | None:
     """Civil date of a sample point: civilTime if given, else physicalTime in TIMEZONE."""
     sample = _sample_time(point, data_type)
     day = civil_date(sample.get("civilTime"))
@@ -84,10 +102,10 @@ def sample_day(point: Any, data_type: str) -> date | None:
     return None
 
 
-def sample_key(data_type: str) -> Callable[[Any], str | None]:
+def sample_key(data_type: str) -> Callable[[object], str | None]:
     """Merge identity for sample lists: the physical timestamp of the sample."""
 
-    def key(point: Any) -> str | None:
+    def key(point: object) -> str | None:
         stamp = _sample_time(point, data_type).get("physicalTime")
         return f"sampleTime:{stamp}" if isinstance(stamp, str) and stamp else None
 
@@ -95,11 +113,11 @@ def sample_key(data_type: str) -> Callable[[Any], str | None]:
 
 
 # Lists merged by something other than the record name.
-MERGE_KEYS: dict[str, Callable[[Any], str | None]] = {"weight": sample_key("weight")}
+MERGE_KEYS: dict[str, Callable[[object], str | None]] = {"weight": sample_key("weight")}
 
 
-def fetch_range(  # noqa: C901 - split in refactor session
-    client: Any,
+def fetch_range(
+    client: HealthApi,
     start: date,
     end: date,
     data_dir: Path,
@@ -111,23 +129,42 @@ def fetch_range(  # noqa: C901 - split in refactor session
     data_dir = Path(data_dir)
     report = FetchReport()
     days = days_between(start, end)
-    metrics: dict[date, dict[str, Any]] = {day: {} for day in days}
-    sleep: dict[date, list] = {}
-    workouts: dict[date, list] = {}
-
+    collected = _Collected(metrics={day: {} for day in days})
     meta_path = data_dir / "_meta.json"
     old_meta = load_json(meta_path) or {}
     # Days whose per-day lists failed for a transient reason in an earlier run.
     # `backfill` must not skip them just because a daily file exists.
     retry_days: set[str] = set(old_meta.get("incomplete_days", []))
-    attempted: set[date] = set()
-    incomplete: set[date] = set()
+    to_list = [
+        day
+        for day in days
+        if not (
+            skip_existing
+            and day_path(data_dir, "daily", day).exists()
+            and day.isoformat() not in retry_days
+        )
+    ]
+    variant_cache: dict[str, int] = {}
 
-    def record_error(data_type: str, err: Exception) -> None:
-        report.requests_failed += 1
-        report.errors.setdefault(data_type, str(err))
+    _fetch_rollups(client, start, end, collected, report)
+    _fetch_day_lists(client, to_list, variant_cache, collected, report)
+    _fetch_weight(client, start, end, variant_cache, collected, report)
+    _save(data_dir, days, collected, report)
+    # TCX for the stored workouts of the window (also those stored earlier).
+    report.tcx = export_tcx_for_days(client, data_dir, days, log)
+    report.files_changed += report.tcx.files_changed
+    _write_meta(meta_path, start, end, retry_days, collected, report)
+    log(
+        f"Fetched {start} .. {end}: {report.requests_ok} requests ok, "
+        f"{report.requests_failed} failed, {report.files_changed} files changed."
+    )
+    return report
 
-    # 1. Aggregated metrics: one request per window of days.
+
+def _fetch_rollups(
+    client: HealthApi, start: date, end: date, collected: _Collected, report: FetchReport
+) -> None:
+    """Aggregated metrics: one request per window of days and rollup type."""
     for rollup in ROLLUP_SPECS:
         for window_start, window_end in chunks(start, end, rollup.max_days):
             try:
@@ -135,14 +172,14 @@ def fetch_range(  # noqa: C901 - split in refactor session
                     rollup.data_type, window_start, window_end + timedelta(days=1)
                 )
             except HealthApiError as err:
-                record_error(rollup.data_type, err)
+                report.record_error(rollup.data_type, err)
                 break
             report.requests_ok += 1
             matched = 0
             for point in points:
                 day = civil_date(point.get("civilStartTime"))
-                if day in metrics:
-                    metrics[day][rollup.data_type] = point
+                if day in collected.metrics:
+                    collected.metrics[day][rollup.data_type] = point
                     matched += 1
             if points and not matched:
                 # Most likely the day field is not called civilStartTime (unverified).
@@ -152,91 +189,108 @@ def fetch_range(  # noqa: C901 - split in refactor session
                     f"{window_start}..{window_end}; nothing stored",
                 )
 
-    # 2. Per-day lists: daily summaries, sleep sessions and workouts.
-    variant_cache: dict[str, int] = {}
+
+def _fetch_day_lists(
+    client: HealthApi,
+    days: list[date],
+    variant_cache: dict[str, int],
+    collected: _Collected,
+    report: FetchReport,
+) -> None:
+    """Per-day lists: daily summaries, sleep sessions and workouts."""
     broken: set[str] = set()
     for day in days:
-        if (
-            skip_existing
-            and day_path(data_dir, "daily", day).exists()
-            and day.isoformat() not in retry_days
-        ):
-            continue
-        attempted.add(day)
+        collected.attempted.add(day)
         for spec in LIST_SPECS:
             if spec.data_type in broken:
                 continue
             try:
                 points = list_for_day(client, spec, day, variant_cache)
             except HealthApiError as err:
-                record_error(spec.data_type, err)
+                report.record_error(spec.data_type, err)
                 if err.status in PERMANENT_STATUSES:
                     broken.add(spec.data_type)  # no point asking again for other days
                 else:
-                    incomplete.add(day)  # timeout, 429/5xx, odd reply: retry later
+                    collected.incomplete.add(day)  # timeout, 429/5xx, odd reply: retry later
                 continue
             report.requests_ok += 1
             if not points:
                 continue
             if spec.category == "daily":
-                metrics[day][spec.data_type] = points
+                collected.metrics[day][spec.data_type] = points
             elif spec.category == "sleep":
-                sleep[day] = points
+                collected.sleep[day] = points
             else:
-                workouts[day] = points
+                collected.workouts[day] = points
 
-    # 2b. Weight: weigh-ins are sparse, so list the last WEIGHT_DAYS days (or the
-    # whole window if longer) on every run, in one paginated call.
+
+def _fetch_weight(
+    client: HealthApi,
+    start: date,
+    end: date,
+    variant_cache: dict[str, int],
+    collected: _Collected,
+    report: FetchReport,
+) -> None:
+    """Weigh-ins are sparse: list the last WEIGHT_DAYS days (or the whole window if
+    longer) in one paginated call on every run, and file each under its own date."""
     weight_start = min(start, end - timedelta(days=WEIGHT_DAYS - 1))
     try:
         points = list_range(
             client, WEIGHT_SPEC, weight_start, end + timedelta(days=1), variant_cache
         )
     except HealthApiError as err:
-        record_error(WEIGHT_SPEC.data_type, err)
-    else:
-        report.requests_ok += 1
-        undated = 0
-        for point in points:
-            day = sample_day(point, WEIGHT_SPEC.data_type)
-            if day is None:
-                undated += 1
-                continue
-            metrics.setdefault(day, {}).setdefault(WEIGHT_SPEC.data_type, []).append(point)
-        if undated:
-            report.errors.setdefault(
-                WEIGHT_SPEC.data_type,
-                f"{undated} weight point(s) had no sampleTime civilTime/physicalTime; not stored",
-            )
+        report.record_error(WEIGHT_SPEC.data_type, err)
+        return
+    report.requests_ok += 1
+    undated = 0
+    for point in points:
+        day = sample_day(point, WEIGHT_SPEC.data_type)
+        if day is None:
+            undated += 1
+            continue
+        collected.metrics.setdefault(day, {}).setdefault(WEIGHT_SPEC.data_type, []).append(point)
+    if undated:
+        report.errors.setdefault(
+            WEIGHT_SPEC.data_type,
+            f"{undated} weight point(s) had no sampleTime civilTime/physicalTime; not stored",
+        )
 
-    # 3. Save, merging into what is already stored. Weight can add days
-    # outside the window; those files are merged the same way.
-    for day in sorted(metrics):
-        report.files_changed += _save_daily(data_dir, day, metrics[day])
+
+def _save(data_dir: Path, days: list[date], collected: _Collected, report: FetchReport) -> None:
+    """Merge into what is already stored. Weight can add days outside the window;
+    those files are merged the same way."""
+    for day in sorted(collected.metrics):
+        report.files_changed += _save_daily(data_dir, day, collected.metrics[day])
     for day in days:
-        report.files_changed += _save_list(data_dir, "sleep", "sessions", day, sleep.get(day))
-        report.files_changed += _save_list(data_dir, "workouts", "workouts", day, workouts.get(day))
+        report.files_changed += _save_list(
+            data_dir, "sleep", "sessions", day, collected.sleep.get(day)
+        )
+        report.files_changed += _save_list(
+            data_dir, "workouts", "workouts", day, collected.workouts.get(day)
+        )
 
-    # 3b. TCX for the stored workouts of the window (also those stored earlier).
-    report.tcx = export_tcx_for_days(client, data_dir, days, log)
-    report.files_changed += report.tcx.files_changed
 
-    # 4. Metadata, rewritten on every run (last_fetch_utc always changes).
-    retry_days -= {day.isoformat() for day in attempted}
-    retry_days |= {day.isoformat() for day in incomplete}
+def _write_meta(
+    meta_path: Path,
+    start: date,
+    end: date,
+    retry_days: set[str],
+    collected: _Collected,
+    report: FetchReport,
+) -> None:
+    """Rewritten on every run (last_fetch_utc always changes)."""
+    still_to_retry = (retry_days - {day.isoformat() for day in collected.attempted}) | {
+        day.isoformat() for day in collected.incomplete
+    }
     meta = {
         "last_fetch_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "window": [start.isoformat(), end.isoformat()],
         "api_errors": report.errors,
-        "incomplete_days": sorted(retry_days),
+        "incomplete_days": sorted(still_to_retry),
         "tcx": report.tcx.as_meta(),
     }
     report.files_changed += write_if_changed(meta_path, meta)
-    log(
-        f"Fetched {start} .. {end}: {report.requests_ok} requests ok, "
-        f"{report.requests_failed} failed, {report.files_changed} files changed."
-    )
-    return report
 
 
 def _save_daily(data_dir: Path, day: date, new_metrics: dict[str, Any]) -> bool:
@@ -255,7 +309,7 @@ def _save_daily(data_dir: Path, day: date, new_metrics: dict[str, Any]) -> bool:
     return write_if_changed(path, {"date": day.isoformat(), "metrics": merged})
 
 
-def _save_list(data_dir: Path, category: str, key: str, day: date, items: list | None) -> bool:
+def _save_list(data_dir: Path, category: str, key: str, day: date, items: Points | None) -> bool:
     if not items:
         return False
     path = day_path(data_dir, category, day)
