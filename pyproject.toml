@@ -84,7 +84,7 @@ known-first-party = ["google_health_claude"]
 
 [tool.mypy]
 python_version = "3.10"
-files = ["src"]
+files = ["src", "scripts"]
 mypy_path = "src"
 # Strict by default, so new modules and packages start strict. A per-module
 # `strict = true` override would leak to every module, hence this direction.
