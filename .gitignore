@@ -11,6 +11,9 @@ samples/
 *.tcx
 *.tcx.gz
 _meta.json
+# ...except the golden test data, which is invented (see tests/test_golden.py)
+!/tests/golden/raw/_meta.json
+!/tests/golden/raw/tcx/*/*.tcx.gz
 
 # Derived tables and SQLite built by `derive` (health data)
 /derived/

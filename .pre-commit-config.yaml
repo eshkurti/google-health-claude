@@ -1,4 +1,6 @@
 # Install once: pre-commit install
+# Golden files are generated and compared byte for byte: no hook may rewrite them.
+exclude: ^tests/golden/
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
