@@ -96,7 +96,6 @@ strict = true
 module = [
     "google_health_claude",
     "google_health_claude.__main__",
-    "google_health_claude.auth",
     "google_health_claude.cli",
     "google_health_claude.config",
     "google_health_claude.datatypes",

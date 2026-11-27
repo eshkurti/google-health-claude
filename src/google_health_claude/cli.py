@@ -140,7 +140,7 @@ def main(argv: list[str] | None = None) -> int:  # noqa: C901 - split in refacto
     args = build_parser().parse_args(argv)
 
     if args.command == "auth":
-        from .auth import run_auth
+        from .api.auth import run_auth
 
         return run_auth(args.client_secret, args.token_file)
 

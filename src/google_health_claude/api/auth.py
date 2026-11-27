@@ -14,9 +14,9 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .api.client import HealthApiError, HealthClient
-from .api.credentials import DEFAULT_TOKEN_FILE, Credentials
-from .config import READ_SCOPES
+from ..config import READ_SCOPES
+from .client import HealthApiError, HealthClient
+from .credentials import DEFAULT_TOKEN_FILE, Credentials
 
 
 def run_auth(client_secret_path: Path, token_path: Path | None = None) -> int:
