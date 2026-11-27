@@ -1,13 +1,19 @@
-"""Golden test: the demo generator and derive, pinned byte for byte.
+"""Golden test: the demo generator and derive, pinned to their exact output.
 
 tests/golden/raw/             `demo --seed 1 --weeks 3` (invented data, fetch's layout)
 tests/golden/expected/        derive's output for it: every CSV and schema.md
 tests/golden/expected_sqlite/ one row per workout for SQLite-only tables (a digest of
                               exercise_points, which is too large to keep in full)
 
-Two checks: regenerating from the seed reproduces raw/ exactly (guards the
-generator), and derive reproduces expected/ exactly (guards derive). SQLite is
+Two checks: regenerating from the seed reproduces raw/ (guards the generator),
+and derive reproduces expected/ byte for byte (guards derive). SQLite is
 compared through queries, never by file bytes.
+
+JSON, CSV and Markdown are compared byte for byte. A .tcx.gz is compared by its
+decompressed content plus a gzip header with mtime 0, not by its compressed
+bytes: those depend on the Python build (3.11 and 3.12 copy zlib's OS byte into
+the header, Windows builds from 3.14 compress with zlib-ng). Identical bytes for
+the same Python and zlib are checked in test_demo.py.
 
 Regenerate after an intended change with ``python -m pytest tests/test_golden.py
 --update-golden`` and commit the golden files on their own, with the reason.
@@ -40,6 +46,8 @@ SEED, WEEKS = 1, 3
 TEXT_SUFFIXES = (".json", ".csv", ".md")
 DIGEST_COLUMNS = ("hr_bpm", "speed_m_s", "alt_m")
 DIGEST_HEADER = ("workout_id", "rows", "with_hr", "with_speed", "with_alt", "sha256")
+GZIP_DEFLATE_MAGIC = bytes([0x1F, 0x8B, 0x08])  # gzip id, compression method deflate
+ZERO_MTIME = bytes(4)
 
 
 def files_of(root: Path) -> dict[str, bytes]:
@@ -57,13 +65,12 @@ def assert_same_tree(actual: Path, expected: Path) -> None:
             continue
         expected_text, actual_text = want[name], got[name]
         if name.endswith(".gz"):
+            problem = gzip_header_problem(got[name])
+            if problem:
+                pytest.fail(f"{name}: {problem} (zlib {zlib.ZLIB_RUNTIME_VERSION})")
             expected_text, actual_text = gzip.decompress(want[name]), gzip.decompress(got[name])
             if expected_text == actual_text:
-                pytest.fail(
-                    f"{name}: content identical, only the gzip stream differs "
-                    f"({len(want[name])} bytes expected, {len(got[name])} actual; "
-                    f"zlib {zlib.ZLIB_RUNTIME_VERSION})"
-                )
+                continue  # same content; the deflate stream may differ between builds
         elif not name.endswith(TEXT_SUFFIXES):
             pytest.fail(
                 f"{name} differs ({len(want[name])} bytes expected, {len(got[name])} actual)"
@@ -78,6 +85,15 @@ def assert_same_tree(actual: Path, expected: Path) -> None:
         shown = list(diff)
         more = f"\n... {len(shown) - 80} more diff lines" if len(shown) > 80 else ""
         pytest.fail(f"{name} differs:\n" + "\n".join(shown[:80]) + more)
+
+
+def gzip_header_problem(data: bytes) -> str | None:
+    """What is wrong with a gzip header as fetch writes it (deflate, mtime 0), if anything."""
+    if data[:3] != GZIP_DEFLATE_MAGIC:
+        return "not a deflate gzip stream"
+    if data[4:8] != ZERO_MTIME:
+        return "gzip mtime is not 0"
+    return None
 
 
 def _lines(content: bytes) -> list[str]:
