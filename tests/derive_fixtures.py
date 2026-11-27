@@ -31,6 +31,8 @@ import json
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
+from google_health_claude.demo import shapes
+
 LAT, LON = "41.8902102", "12.4922309"  # must never appear in any output
 COORD_MARKERS = ("8902102", "4922309")
 AS_OF = date(2026, 11, 23)
@@ -41,18 +43,21 @@ WEIGHT_ONLY = (
     (date(2026, 9, 3), "2026-09-03T05:30:00Z", 80500),
     (date(2026, 9, 7), "2026-09-07T05:45:00Z", 80250),
 )
+HR_ZONE_BOUNDS = (
+    ("LIGHT", 30, 116),
+    ("MODERATE", 117, 142),
+    ("VIGOROUS", 143, 175),
+    ("PEAK", 176, 220),
+)
+
+
+def cet(_moment: datetime) -> int:
+    """Every offset in this fixture is +01:00, also for the September weigh-ins."""
+    return 3600
 
 
 def utc(text: str) -> datetime:
-    return datetime.fromisoformat(text).replace(tzinfo=timezone.utc)
-
-
-def z(moment: datetime) -> str:
-    return moment.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
-def ymd(day: date) -> dict:
-    return {"year": day.year, "month": day.month, "day": day.day}
+    return datetime.fromisoformat(text.rstrip("Z")).replace(tzinfo=timezone.utc)
 
 
 def write_json(path: Path, payload) -> None:
@@ -95,27 +100,16 @@ def make_track(segments, gap=None, gap_extra_m=0.0, steps=(1,)):
 
 def tcx_bytes(start: datetime, points, gps: bool, alt_step=None) -> bytes:
     """``alt_step`` = (t_s, metres): altitude jumps by that much from t_s on."""
-    rows = []
+    trackpoints = []
     for i, (t, hr, d) in enumerate(points):
-        parts = [f"<Time>{z(start + timedelta(seconds=t))}</Time>"]
         if gps:
-            parts.append(
-                f"<Position><LatitudeDegrees>{LAT}</LatitudeDegrees>"
-                f"<LongitudeDegrees>{LON}</LongitudeDegrees></Position>"
-            )
             jump = alt_step[1] if alt_step and t >= alt_step[0] else 0
-            parts.append(f"<AltitudeMeters>{50 + jump + (i % 7) - 3:.1f}</AltitudeMeters>")
-            parts.append(f"<DistanceMeters>{d:.1f}</DistanceMeters>")
-        parts.append(f"<HeartRateBpm><Value>{hr}</Value></HeartRateBpm>")
-        rows.append("<Trackpoint>" + "".join(parts) + "</Trackpoint>")
-    xml = (
-        '<?xml version="1.0" encoding="UTF-8"?>'
-        '<TrainingCenterDatabase xmlns="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2">'
-        f'<Activities><Activity Sport="Running"><Id>{z(start)}</Id><Lap StartTime="{z(start)}">'
-        f"<TotalTimeSeconds>1</TotalTimeSeconds><DistanceMeters>0</DistanceMeters><Track>{''.join(rows)}</Track>"
-        "</Lap></Activity></Activities></TrainingCenterDatabase>"
-    )
-    return xml.encode()
+            trackpoints.append(
+                shapes.Trackpoint(t, hr, d, float(LAT), float(LON), 50 + jump + (i % 7) - 3)
+            )
+        else:
+            trackpoints.append(shapes.Trackpoint(t, hr))
+    return shapes.tcx_document(start, trackpoints)
 
 
 def write_tcx(root: Path, day: date, ex_id: str, content: bytes) -> None:
@@ -126,29 +120,7 @@ def write_tcx(root: Path, day: date, ex_id: str, content: bytes) -> None:
 
 def splits_from(start: datetime, points) -> list[dict]:
     """API-style per-km splits; boundaries at the first point past each km."""
-    splits, prev_t, prev_d, km = [], 0.0, 0.0, 1
-    final_t, _, final_d = points[-1]
-    for t, _, d in points:
-        if d >= km * 1000 or (t, d) == (final_t, final_d):
-            seconds, metres = t - prev_t, d - prev_d
-            if metres <= 0:
-                break
-            splits.append(
-                {
-                    "splitType": "DISTANCE",
-                    "startTime": z(start + timedelta(seconds=prev_t)),
-                    "startUtcOffset": "3600s",
-                    "endTime": z(start + timedelta(seconds=t)),
-                    "endUtcOffset": "3600s",
-                    "activeDuration": f"{seconds:g}s",
-                    "metricsSummary": {
-                        "distanceMillimeters": round(metres * 1000),
-                        "averagePaceSecondsPerMeter": seconds / metres,
-                    },
-                }
-            )
-            prev_t, prev_d, km = t, d, km + 1
-    return splits
+    return shapes.splits(start, [(t, d) for t, _, d in points], offset_of=cet)
 
 
 # -- records -----------------------------------------------------------------------------
@@ -169,172 +141,68 @@ def workout(
     splits=None,
     elevation_mm=None,
 ):
-    end = start + timedelta(seconds=seconds)
-    summary = {
-        "distanceMillimeters": round(distance_m * 1000),
-        "averagePaceSecondsPerMeter": seconds / distance_m if distance_m else 0.0,
-    }
-    if steps is not None:
-        summary["steps"] = str(steps)
-    if avg_hr is not None:
-        summary["averageHeartRateBeatsPerMinute"] = str(avg_hr)
-        summary["caloriesKcal"] = int(seconds / 6)
-    if zones is not None:
-        summary["heartRateZoneDurations"] = {
-            f"{n}Time": f"{s}s"
-            for n, s in zip(("light", "moderate", "vigorous", "peak"), zones, strict=True)
-        }
-    if azm is not None:
-        summary["activeZoneMinutes"] = str(azm)
-    if elevation_mm is not None:
-        summary["elevationGainMillimeters"] = elevation_mm
-    exercise = {
-        "exerciseType": ex_type,
-        "displayName": ex_type.title(),
-        "activeDuration": f"{seconds}s",
-        "interval": {
-            "startTime": z(start),
-            "startUtcOffset": "3600s",
-            "endTime": z(end),
-            "endUtcOffset": "3600s",
-        },
-        "metricsSummary": summary,
-    }
-    if splits:
-        exercise["splits"] = splits
-    return {
-        "name": f"users/0000/dataTypes/exercise/dataPoints/{ex_id}",
-        "dataSource": {"platform": platform, "recordingMethod": method},
-        "exercise": exercise,
-    }
+    return shapes.exercise(
+        ex_id,
+        ex_type,
+        start,
+        seconds,
+        offset_of=cet,
+        platform=platform,
+        method=method,
+        distance_m=distance_m,
+        avg_hr=avg_hr,
+        kcal=int(seconds / 6) if avg_hr is not None else None,
+        step_count=steps,
+        zone_s=zones,
+        azm=azm,
+        elevation_mm=elevation_mm,
+        split_list=splits or (),
+    )
 
 
 def weight_point(point_id: str, platform: str, grams: int, stamp: str) -> dict:
-    return {
-        "name": f"users/0000/dataTypes/weight/dataPoints/{point_id}",
-        "dataSource": {"platform": platform, "recordingMethod": "MANUAL"},
-        "weight": {
-            "weightGrams": grams,
-            "sampleTime": {"physicalTime": stamp, "utcOffset": "3600s"},
-        },
-    }
+    return shapes.weight(point_id, platform, grams, utc(stamp), offset_of=cet)
 
 
 def daily_metrics(day: date, i: int) -> dict:
-    def rollup(key, payload):
-        return {
-            "civilStartTime": {"date": ymd(day)},
-            "civilEndTime": {"date": ymd(day + timedelta(days=1))},
-            key: payload,
-        }
-
-    def summary(key, payload):
-        return [
-            {
-                "dataSource": {"platform": "FITBIT", "recordingMethod": "DERIVED"},
-                key: {"date": ymd(day), **payload},
-            }
-        ]
-
     hrv = 95.0 if day == HRV_OUTLIER_DAY else 40.0 + (i % 5) - 2
+    zero = day == ZERO_ZONE_DAY  # the API leaves zero-valued zones and levels out
+    azm_day = day == date(2026, 11, 16)
     metrics = {
-        "steps": rollup("steps", {"countSum": str(8000 + 10 * i)}),
-        "distance": rollup("distance", {"millimetersSum": str(6_000_000 + 1000 * i)}),
-        "active-energy-burned": rollup("activeEnergyBurned", {"kcalSum": 500.5}),
-        "total-calories": rollup("totalCalories", {"kcalSum": 2500.25}),
-        "heart-rate": rollup(
-            "heartRate",
-            {"beatsPerMinuteAvg": 70.5, "beatsPerMinuteMin": 50, "beatsPerMinuteMax": 160},
+        "steps": shapes.steps(day, 8000 + 10 * i),
+        "distance": shapes.distance(day, 6_000_000 + 1000 * i),
+        "active-energy-burned": shapes.active_energy_burned(day, 500.5),
+        "total-calories": shapes.total_calories(day, 2500.25),
+        "heart-rate": shapes.heart_rate(day, 70.5, 50, 160),
+        # The fixture never sends MODERATE active minutes.
+        "active-minutes": shapes.active_minutes(
+            day, {"LIGHT": 120, "MODERATE": 0, "VIGOROUS": 0 if zero else 25}
         ),
-        "active-minutes": rollup(
-            "activeMinutes",
+        "active-zone-minutes": shapes.active_zone_minutes(
+            day, 10 if azm_day else 0, 60 if azm_day else 0, 12 if azm_day else 0
+        ),
+        "time-in-heart-rate-zone": shapes.time_in_heart_rate_zone(
+            day,
             {
-                "activeMinutesRollupByActivityLevel": [
-                    {"activityLevel": "LIGHT", "activeMinutesSum": "120"},
-                    {"activityLevel": "VIGOROUS", "activeMinutesSum": "25"},
-                ]
+                "LIGHT": 80000,
+                "MODERATE": 600,
+                "VIGOROUS": 0 if zero else 1800,
+                "PEAK": 0 if zero else 360,
             },
         ),
-        "active-zone-minutes": rollup(
-            "activeZoneMinutes",
-            {
-                "sumInFatBurnHeartZone": "10" if day == date(2026, 11, 16) else "0",
-                "sumInCardioHeartZone": "60" if day == date(2026, 11, 16) else "0",
-                "sumInPeakHeartZone": "12" if day == date(2026, 11, 16) else "0",
-            },
+        "sedentary-period": shapes.sedentary_period(day, 36000),
+        "daily-resting-heart-rate": shapes.resting_heart_rate(day, 55 + (i % 3) - 1),
+        "daily-heart-rate-variability": shapes.heart_rate_variability(day, hrv, 45.5, 2.5, 58),
+        "daily-oxygen-saturation": shapes.oxygen_saturation(
+            day, 96 + ((i % 4) - 1.5) * 0.2, 94, 98.5, 1.25
         ),
-        "time-in-heart-rate-zone": rollup(
-            "timeInHeartRateZone",
-            {
-                "timeInHeartRateZones": [
-                    {"heartRateZone": "LIGHT", "duration": "80000s"},
-                    {"heartRateZone": "MODERATE", "duration": "600s"},
-                    {"heartRateZone": "VIGOROUS", "duration": "1800s"},
-                    {"heartRateZone": "PEAK", "duration": "360s"},
-                ]
-            },
-        ),
-        "sedentary-period": rollup("sedentaryPeriod", {"durationSum": "36000s"}),
-        "daily-resting-heart-rate": summary(
-            "dailyRestingHeartRate", {"beatsPerMinute": str(55 + (i % 3) - 1)}
-        ),
-        "daily-heart-rate-variability": summary(
-            "dailyHeartRateVariability",
-            {
-                "averageHeartRateVariabilityMilliseconds": hrv,
-                "deepSleepRootMeanSquareOfSuccessiveDifferencesMilliseconds": 45.5,
-                "entropy": 2.5,
-                "nonRemHeartRateBeatsPerMinute": "58",
-            },
-        ),
-        "daily-oxygen-saturation": summary(
-            "dailyOxygenSaturation",
-            {
-                "averagePercentage": 96 + ((i % 4) - 1.5) * 0.2,
-                "lowerBoundPercentage": 94,
-                "upperBoundPercentage": 98.5,
-                "standardDeviationPercentage": 1.25,
-            },
-        ),
-        "daily-respiratory-rate": summary("dailyRespiratoryRate", {"breathsPerMinute": 14.5}),
-        "daily-sleep-temperature-derivations": summary(
-            "dailySleepTemperatureDerivations",
-            {
-                "nightlyTemperatureCelsius": 33.75,
-                "baselineTemperatureCelsius": 33.5,
-                "relativeNightlyStddev30dCelsius": 0.25,
-            },
-        ),
-        "daily-vo2-max": summary(
-            "dailyVo2Max",
-            {"vo2Max": 42.5, "vo2MaxCovariance": 1.5, "cardioFitnessLevel": "AVERAGE"},
-        ),
-        "daily-heart-rate-zones": summary(
-            "dailyHeartRateZones",
-            {
-                "heartRateZones": [
-                    {
-                        "heartRateZoneType": t,
-                        "minBeatsPerMinute": str(lo),
-                        "maxBeatsPerMinute": str(hi),
-                    }
-                    for t, lo, hi in (
-                        ("LIGHT", 30, 116),
-                        ("MODERATE", 117, 142),
-                        ("VIGOROUS", 143, 175),
-                        ("PEAK", 176, 220),
-                    )
-                ]
-            },
-        ),
+        "daily-respiratory-rate": shapes.respiratory_rate(day, 14.5),
+        "daily-sleep-temperature-derivations": shapes.sleep_temperature(day, 33.75, 33.5, 0.25),
+        "daily-vo2-max": shapes.vo2_max(day, 42.5, 1.5, "AVERAGE"),
+        "daily-heart-rate-zones": shapes.heart_rate_zones(day, HR_ZONE_BOUNDS),
     }
     if day == NO_SPO2_DAY:
         del metrics["daily-oxygen-saturation"]
-    if day == ZERO_ZONE_DAY:  # the API leaves zero-valued zones and levels out
-        zones = metrics["time-in-heart-rate-zone"]["timeInHeartRateZone"]["timeInHeartRateZones"]
-        zones[:] = [z for z in zones if z["heartRateZone"] in ("LIGHT", "MODERATE")]
-        levels = metrics["active-minutes"]["activeMinutes"]["activeMinutesRollupByActivityLevel"]
-        levels[:] = [lv for lv in levels if lv["activityLevel"] == "LIGHT"]
     if day == NO_ZONE_DAY:
         del metrics["time-in-heart-rate-zone"]
     if day == WEIGH_DAY:
@@ -350,16 +218,20 @@ def daily_metrics(day: date, i: int) -> dict:
         ]
     if day == date(2026, 11, 16):
         metrics["run-vo2-max"] = [
-            {
-                "dataSource": {"platform": "FITBIT", "recordingMethod": "DERIVED"},
-                "runVo2Max": {
-                    "runVo2Max": 43.6,
-                    "sampleTime": {"physicalTime": stamp, "utcOffset": "3600s"},
-                },
-            }
-            for stamp in ("2026-11-16T06:00:00Z", "2026-11-16T06:00:03Z")
+            shapes.run_vo2_max(43.6, utc(stamp), offset_of=cet)
+            for stamp in ("2026-11-16T06:00:00", "2026-11-16T06:00:03")
         ]
     return metrics
+
+
+SLEEP_SUMMARY = shapes.SleepSummary(
+    asleep_min=420,
+    awake_min=30,
+    in_period_min=450,
+    to_fall_asleep_min=10,
+    after_wake_up_min=0,
+    stages=(("AWAKE", 30, 3), ("LIGHT", 270, 3), ("DEEP", 60, 3), ("REM", 90, 3)),
+)
 
 
 def sleep_session(sleep_id, bed, wake, main=True):
@@ -375,54 +247,15 @@ def sleep_session(sleep_id, bed, wake, main=True):
     ):
         end = min(cursor + timedelta(minutes=minutes), wake)
         if end > cursor:
-            stages.append(
-                {
-                    "type": stage,
-                    "startTime": z(cursor),
-                    "endTime": z(end),
-                    "startUtcOffset": "3600s",
-                    "endUtcOffset": "3600s",
-                }
-            )
+            stages.append(shapes.Span(stage, cursor, end))
         cursor = end
-    return {
-        "name": f"users/0000/dataTypes/sleep/dataPoints/{sleep_id}",
-        "dataSource": {"platform": "FITBIT", "recordingMethod": "DERIVED"},
-        "sleep": {
-            "type": "STAGES",
-            "interval": {
-                "startTime": z(bed),
-                "endTime": z(wake),
-                "startUtcOffset": "3600s",
-                "endUtcOffset": "3600s",
-            },
-            "metadata": {"mainSleep": main, "processed": True},
-            "summary": {
-                "minutesAsleep": "420",
-                "minutesAwake": "30",
-                "minutesInSleepPeriod": "450",
-                "minutesToFallAsleep": "10",
-                "minutesAfterWakeUp": "0",
-                "stagesSummary": [
-                    {"type": t, "minutes": m, "count": "3"}
-                    for t, m in (("AWAKE", "30"), ("LIGHT", "270"), ("DEEP", "60"), ("REM", "90"))
-                ],
-            },
-            "stages": stages,
-            "shortAwakenings": [
-                {
-                    "type": "LIGHT",
-                    "startTime": z(bed + timedelta(hours=2)),
-                    "endTime": z(bed + timedelta(hours=2, minutes=1)),
-                },
-                {
-                    "type": "REM",
-                    "startTime": z(bed + timedelta(hours=4)),
-                    "endTime": z(bed + timedelta(hours=4, minutes=2)),
-                },
-            ],
-        },
-    }
+    awakenings = [
+        shapes.Span("LIGHT", bed + timedelta(hours=2), bed + timedelta(hours=2, minutes=1)),
+        shapes.Span("REM", bed + timedelta(hours=4), bed + timedelta(hours=4, minutes=2)),
+    ]
+    return shapes.sleep_session(
+        sleep_id, bed, wake, stages, SLEEP_SUMMARY, awakenings, main=main, offset_of=cet
+    )
 
 
 # -- the dataset ----------------------------------------------------------------------------
