@@ -15,7 +15,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 from .days import build_days
-from .load import resolve_data_dir
+from .load import load, resolve_data_dir
 from .output import ensure_notes, read_notes, write_csvs, write_sqlite
 from .values import TZ, timestamp
 from .workouts import build_workouts
@@ -58,7 +58,7 @@ def derive(
     as_of = as_of or default_as_of(data_dir)
     report = DeriveReport(as_of=as_of)
 
-    workouts = build_workouts(data_dir, report.warnings.append)
+    workouts = build_workouts(load(data_dir), report.warnings.append)
     tables = {
         "workouts": workouts.workouts,
         "run_splits": workouts.run_splits,

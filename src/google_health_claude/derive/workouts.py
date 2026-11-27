@@ -10,17 +10,16 @@ Dedup rules (see the data repo's schema notes):
 
 from __future__ import annotations
 
-import json
-from collections.abc import Callable
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from itertools import groupby
 from math import fsum
-from pathlib import Path
 from statistics import median
 from typing import Any
 
 from ..records import exercise_id, tcx_eligible
+from .load import JsonFile, RawData, TcxFile
 from .points import (
     Point,
     gps_segments,
@@ -60,7 +59,7 @@ class Session:
     primary: Raw
     members: list[Raw]
     hc_copies: int = 0
-    tcx_path: Path | None = None
+    tcx_file: str | None = None  # path relative to the data folder
     points: list[Point] | None = None  # None: no readable TCX
     run_vo2max: float | None = None
 
@@ -92,10 +91,11 @@ class WorkoutTables:
 # -- loading and dedup ------------------------------------------------------------
 
 
-def load_raw(data_dir: Path) -> list[Raw]:
+def raw_records(files: Iterable[JsonFile]) -> list[Raw]:
+    """Exercise records with an id and a start and end time; the first copy of an id wins."""
     seen: dict[str, Raw] = {}
-    for path in sorted((Path(data_dir) / "workouts").glob("*.json")):
-        body = json.loads(path.read_text(encoding="utf-8"))
+    for file in files:
+        body = file.body
         for rec in body.get("workouts", []) if isinstance(body, dict) else []:
             if not isinstance(rec, dict):
                 continue
@@ -152,37 +152,27 @@ def dedupe(raws: list[Raw]) -> list[Session]:
     return sessions
 
 
-def tcx_index(data_dir: Path) -> dict[str, Path]:
-    suffix = ".tcx.gz"
-    return {
-        p.name[: -len(suffix)]: p for p in sorted((Path(data_dir) / "tcx").glob(f"*/*{suffix}"))
-    }
-
-
-def attach_tcx(sessions: list[Session], data_dir: Path, warn: Callable[[str], None]) -> None:
-    index = tcx_index(data_dir)
+def attach_tcx(
+    sessions: list[Session], tcx: Mapping[str, TcxFile], warn: Callable[[str], None]
+) -> None:
     for s in sessions:
-        path = next((index[m.id] for m in [s.primary, *s.members] if m.id in index), None)
-        if path is None:
+        file = next((tcx[m.id] for m in [s.primary, *s.members] if m.id in tcx), None)
+        if file is None:
             continue
-        s.tcx_path = path
-        try:
-            gz: bytes | None = path.read_bytes()
-        except OSError:
-            gz = None
-        s.points = parse_points(gz) if gz is not None else None
+        s.tcx_file = file.path
+        s.points = parse_points(file.gz) if file.gz is not None else None
         if s.points is None:
             warn(
                 f"unreadable TCX for the {s.primary.type} workout on {local_date(s.primary.start)}"
             )
 
 
-def load_run_vo2(data_dir: Path) -> list[tuple[datetime, float]]:
-    """run-vo2-max samples, with identical duplicates (same value within 5 min) merged."""
+def run_vo2_samples(daily: Iterable[JsonFile]) -> list[tuple[datetime, float]]:
+    """run-vo2-max samples of every daily file, identical duplicates (same value within 5 min)
+    merged."""
     samples = []
-    for path in sorted((Path(data_dir) / "daily").glob("*.json")):
-        body = json.loads(path.read_text(encoding="utf-8"))
-        for point in dig(body, "metrics", "run-vo2-max") or []:
+    for file in daily:
+        for point in dig(file.body, "metrics", "run-vo2-max") or []:
             moment = timestamp(dig(point, "runVo2Max", "sampleTime", "physicalTime"))
             value = num(dig(point, "runVo2Max", "runVo2Max"))
             if moment is not None and value is not None:
@@ -214,7 +204,7 @@ def _pace_min_km(seconds_per_meter: Any) -> float | None:
     return value * 1000 / 60 if value else None
 
 
-def workout_row(s: Session, data_dir: Path) -> dict[str, Any]:
+def workout_row(s: Session) -> dict[str, Any]:
     ex = s.primary.exercise
     summary = ex.get("metricsSummary") or {}
     zones = summary.get("heartRateZoneDurations") or {}
@@ -265,7 +255,7 @@ def workout_row(s: Session, data_dir: Path) -> dict[str, Any]:
         "merged_ids": ";".join(sorted(m.id for m in s.members if m is not s.primary)) or None,
         "n_raw_merged": len(s.members),
         "n_hc_copies": s.hc_copies,
-        "tcx_file": s.tcx_path.relative_to(data_dir).as_posix() if s.tcx_path else None,
+        "tcx_file": s.tcx_file,
     }
 
 
@@ -425,15 +415,15 @@ def personal_bests(
     return rows
 
 
-def build_workouts(data_dir: Path, warn: Callable[[str], None]) -> WorkoutTables:
-    data_dir = Path(data_dir)
-    tables = WorkoutTables(dedupe(load_raw(data_dir)))
-    attach_tcx(tables.sessions, data_dir, warn)
-    attach_run_vo2(tables.sessions, load_run_vo2(data_dir))
+def build_workouts(raw: RawData, warn: Callable[[str], None]) -> WorkoutTables:
+    """The workout tables from the loaded files; reads nothing itself."""
+    tables = WorkoutTables(dedupe(raw_records(raw.workouts)))
+    attach_tcx(tables.sessions, raw.tcx, warn)
+    attach_run_vo2(tables.sessions, run_vo2_samples(raw.daily))
 
     gps_runs: list[dict[str, Any]] = []
     for s in tables.sessions:
-        row = workout_row(s, data_dir)
+        row = workout_row(s)
         tables.workouts.append(row)
         if row["type"] != "RUNNING" or not row["has_gps"]:
             continue

@@ -5,8 +5,10 @@ from __future__ import annotations
 import csv
 import gzip
 import math
+import shutil
 import sqlite3
 from contextlib import closing
+from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
 from itertools import pairwise
 
@@ -16,10 +18,12 @@ from derive_fixtures import AS_OF, COORD_MARKERS, build_dataset, read_points
 from google_health_claude.cli import main
 from google_health_claude.derive import derive
 from google_health_claude.derive.days import OUTLIER_RULES, OutlierRule, outlier_flags
+from google_health_claude.derive.load import TcxFile, load
 from google_health_claude.derive.output import cell
 from google_health_claude.derive.points import Point, hr_stats, segment_altitudes
 from google_health_claude.derive.schema import TABLES
 from google_health_claude.derive.values import mean, num
+from google_health_claude.derive.workouts import build_workouts
 
 
 @pytest.fixture(scope="module")
@@ -213,6 +217,31 @@ def test_corrupt_tcx_gives_a_warning_not_a_crash(tmp_path):
     tcx.write_bytes(corrupt_gzip(gzip.decompress(tcx.read_bytes())))
     report = derive(data, tmp_path / "out", as_of=AS_OF, log=lambda m: None)
     assert report.warnings == ["unreadable TCX for the RUNNING workout on 2026-11-15"]
+
+
+def test_build_workouts_works_on_loaded_data_without_the_folder(tmp_path):
+    data = tmp_path / "data"
+    build_dataset(data)
+    raw = load(data)
+    shutil.rmtree(data)  # anything build_workouts still read from disk would fail now
+    warnings = []
+    tables = build_workouts(raw, warnings.append)
+    assert [w["id"] for w in tables.workouts] == [
+        "runA",
+        "walk1",
+        "runB1",
+        "str1",
+        "card1",
+        "runC",
+        "runD",
+    ]
+    assert by(tables.workouts, "id")["runA"]["tcx_file"] == "tcx/2026-11-15/runA.tcx.gz"
+    assert warnings == []
+
+    unreadable = replace(raw, tcx={**raw.tcx, "runA": TcxFile("tcx/2026-11-15/runA.tcx.gz", None)})
+    tables = build_workouts(unreadable, warnings.append)
+    assert warnings == ["unreadable TCX for the RUNNING workout on 2026-11-15"]
+    assert by(tables.workouts, "id")["runA"]["has_gps"] is False
 
 
 # -- days -------------------------------------------------------------------------------------
