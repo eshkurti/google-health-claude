@@ -70,3 +70,23 @@ def test_data_dir_is_the_folder_or_its_data_subfolder(tmp_path: Path) -> None:
     assert resolve_data_dir(tmp_path / "data") == tmp_path / "data"
     with pytest.raises(FileNotFoundError, match="no daily/, sleep/ or workouts/ folder"):
         resolve_data_dir(tmp_path / "data" / "sleep")
+
+
+def test_unreadable_non_date_sleep_files_are_skipped_and_reported(tmp_path: Path) -> None:
+    write(tmp_path / "sleep" / "2026-11-01.json", {"sessions": []})
+    (tmp_path / "sleep" / "notes.json").write_text("not json {", encoding="utf-8")
+    write(tmp_path / "sleep" / "readme.json", {"fine": True})  # readable: kept, as before
+
+    raw = load(tmp_path)
+
+    assert [f.stem for f in raw.sleep] == ["2026-11-01", "readme"]
+    assert raw.warnings == ("unreadable sleep file notes.json skipped (not named after a date)",)
+
+
+@pytest.mark.parametrize("folder", ["daily", "workouts"])
+def test_daily_and_workout_files_of_any_name_must_parse(tmp_path: Path, folder: str) -> None:
+    """0.1.0 parsed every file in these folders (daily/ for run VO2 max), so this stays."""
+    (tmp_path / folder).mkdir()
+    (tmp_path / folder / "notes.json").write_text("not json {", encoding="utf-8")
+    with pytest.raises(ValueError, match="Expecting value"):  # json.JSONDecodeError
+        load(tmp_path)

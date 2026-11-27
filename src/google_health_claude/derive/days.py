@@ -15,7 +15,7 @@ from statistics import median
 from typing import Any
 
 from ..records import exercise_id
-from .load import JsonFile, RawData
+from .load import JsonFile, RawData, date_of
 from .values import (
     dig,
     local_date,
@@ -82,11 +82,8 @@ def dated(files: Iterable[JsonFile]) -> dict[date, dict[str, Any]]:
     """The files named after a date whose body is an object, by that date."""
     days = {}
     for file in files:
-        try:
-            day = date.fromisoformat(file.stem)
-        except ValueError:
-            continue
-        if isinstance(file.body, dict):
+        day = date_of(file.stem)
+        if day is not None and isinstance(file.body, dict):
             days[day] = file.body
     return days
 

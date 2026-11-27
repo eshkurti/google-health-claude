@@ -72,7 +72,7 @@ def derive(
             raise ValueError(f"{label} must not be inside the data folder")
     raw = load(data_dir)
     as_of = as_of or as_of_from(raw.last_fetch_utc) or datetime.now(TZ).date()
-    report = DeriveReport(as_of=as_of)
+    report = DeriveReport(as_of=as_of, warnings=list(raw.warnings))
 
     tables = build_tables(raw, as_of, report.warnings.append, points=sqlite_path is not None)
     report.files_changed = write_csvs(out_dir, tables)

@@ -5,6 +5,11 @@ path order, non-date names included), the gzipped TCX bytes under
 ``tcx/<date>/<id>.tcx.gz`` and ``last_fetch_utc`` from ``_meta.json``. It decides
 nothing about the content: which files count, and what a broken TCX means, are
 decided by the pure code in workouts.py and days.py.
+
+One exception keeps 0.1.0's behavior: a ``sleep/`` file whose name is not a date
+is never used, so if it cannot be read it is skipped with a warning instead of
+failing derive. In ``daily/`` and ``workouts/`` every file is used (daily files
+of any name for run VO2 max), so an unreadable one still fails, as in 0.1.0.
 """
 
 from __future__ import annotations
@@ -12,6 +17,7 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -37,6 +43,15 @@ class RawData:
     sleep: tuple[JsonFile, ...] = ()
     tcx: Mapping[str, TcxFile] = field(default_factory=dict)  # by exercise id
     last_fetch_utc: Any = None  # as stored in _meta.json (an RFC 3339 string if present)
+    warnings: tuple[str, ...] = ()  # files skipped while reading
+
+
+def date_of(stem: str) -> date | None:
+    """The date a file is named after, or None: the one rule for "date-named" files."""
+    try:
+        return date.fromisoformat(stem)
+    except ValueError:
+        return None
 
 
 def resolve_data_dir(data_dir: Path) -> Path:
@@ -48,11 +63,22 @@ def resolve_data_dir(data_dir: Path) -> Path:
     raise FileNotFoundError(f"no daily/, sleep/ or workouts/ folder under {data_dir}")
 
 
-def _json_files(folder: Path) -> tuple[JsonFile, ...]:
-    return tuple(
-        JsonFile(path.stem, json.loads(path.read_text(encoding="utf-8")))
-        for path in sorted(folder.glob("*.json"))
-    )
+def _json_files(folder: Path, skipped: list[str] | None = None) -> tuple[JsonFile, ...]:
+    """Every *.json file; with ``skipped``, unreadable files without a date name are
+    left out and reported there instead of raising."""
+    files = []
+    for path in sorted(folder.glob("*.json")):
+        try:
+            body = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):  # ValueError: bad JSON or bad UTF-8
+            if skipped is None or date_of(path.stem) is not None:
+                raise
+            skipped.append(
+                f"unreadable {folder.name} file {path.name} skipped (not named after a date)"
+            )
+            continue
+        files.append(JsonFile(path.stem, body))
+    return tuple(files)
 
 
 def _tcx_files(data_dir: Path) -> dict[str, TcxFile]:
@@ -77,10 +103,12 @@ def _last_fetch_utc(data_dir: Path) -> Any:
 def load(data_dir: Path) -> RawData:
     """Read a data folder (already resolved with resolve_data_dir)."""
     data_dir = Path(data_dir)
+    skipped: list[str] = []
     return RawData(
         workouts=_json_files(data_dir / "workouts"),
         daily=_json_files(data_dir / "daily"),
-        sleep=_json_files(data_dir / "sleep"),
+        sleep=_json_files(data_dir / "sleep", skipped),
         tcx=_tcx_files(data_dir),
         last_fetch_utc=_last_fetch_utc(data_dir),
+        warnings=tuple(skipped),
     )

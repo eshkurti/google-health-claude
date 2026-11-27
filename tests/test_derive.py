@@ -271,6 +271,29 @@ def test_day_tables_use_files_named_after_a_date_with_an_object_body():
     assert dated(files) == {date(2026, 11, 1): {"metrics": {}}}
 
 
+@pytest.mark.parametrize(
+    "content", [b"not json {", bytes([0xFF, 0xFE]) + b" not utf-8"], ids=["json", "utf8"]
+)
+def test_unreadable_sleep_file_without_a_date_name_is_skipped(run, tmp_path, content):
+    """As in 0.1.0, which never opened sleep files whose name is not a date."""
+    data = tmp_path / "data"
+    build_dataset(data)
+    (data / "sleep" / "notes.json").write_bytes(content)
+    report = derive(data, tmp_path / "out", tmp_path / "db.sqlite", log=lambda m: None)
+    assert report.warnings == ["unreadable sleep file notes.json skipped (not named after a date)"]
+    assert report.rows == run["report"].rows
+    for name in ("sleep.csv", "sleep_stages.csv", "daily.csv", "quality.csv"):
+        assert (tmp_path / "out" / name).read_bytes() == (run["out"] / name).read_bytes()
+
+
+def test_unreadable_date_named_sleep_file_still_fails(tmp_path):
+    data = tmp_path / "data"
+    build_dataset(data)
+    (data / "sleep" / "2026-11-20.json").write_text("not json {", encoding="utf-8")
+    with pytest.raises(ValueError, match="Expecting value"):  # json.JSONDecodeError
+        derive(data, tmp_path / "out", log=lambda m: None)
+
+
 # -- days -------------------------------------------------------------------------------------
 
 
