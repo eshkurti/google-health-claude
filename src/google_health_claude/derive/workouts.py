@@ -26,8 +26,8 @@ from .points import (
     gps_segments,
     hr_half_delta,
     hr_stats,
+    parse_points,
     point_rows,
-    read_points,
     walk_seconds,
 )
 from .values import dig, local_date, local_iso, mean, minutes_between, num, ratio, scaled, timestamp
@@ -166,7 +166,11 @@ def attach_tcx(sessions: list[Session], data_dir: Path, warn: Callable[[str], No
         if path is None:
             continue
         s.tcx_path = path
-        s.points = read_points(path)
+        try:
+            gz: bytes | None = path.read_bytes()
+        except OSError:
+            gz = None
+        s.points = parse_points(gz) if gz is not None else None
         if s.points is None:
             warn(
                 f"unreadable TCX for the {s.primary.type} workout on {local_date(s.primary.start)}"

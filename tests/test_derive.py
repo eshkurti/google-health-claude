@@ -11,13 +11,13 @@ from datetime import date, datetime, timedelta, timezone
 from itertools import pairwise
 
 import pytest
-from derive_fixtures import AS_OF, COORD_MARKERS, build_dataset
+from derive_fixtures import AS_OF, COORD_MARKERS, build_dataset, read_points
 
 from google_health_claude.cli import main
 from google_health_claude.derive import derive
 from google_health_claude.derive.days import OUTLIER_RULES, OutlierRule, outlier_flags
 from google_health_claude.derive.output import cell
-from google_health_claude.derive.points import Point, hr_stats, read_points, segment_altitudes
+from google_health_claude.derive.points import Point, hr_stats, segment_altitudes
 from google_health_claude.derive.schema import TABLES
 from google_health_claude.derive.values import mean, num
 

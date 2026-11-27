@@ -32,6 +32,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from google_health_claude.demo import shapes
+from google_health_claude.derive.points import Point, parse_points
 
 LAT, LON = "41.8902102", "12.4922309"  # must never appear in any output
 COORD_MARKERS = ("8902102", "4922309")
@@ -49,6 +50,11 @@ HR_ZONE_BOUNDS = (
     ("VIGOROUS", 143, 175),
     ("PEAK", 176, 220),
 )
+
+
+def read_points(path: Path) -> list[Point] | None:
+    """Trackpoints of a .tcx.gz file on disk (derive itself reads it in derive/load.py)."""
+    return parse_points(Path(path).read_bytes())
 
 
 def cet(_moment: datetime) -> int:

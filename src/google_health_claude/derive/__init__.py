@@ -15,6 +15,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 from .days import build_days
+from .load import resolve_data_dir
 from .output import ensure_notes, read_notes, write_csvs, write_sqlite
 from .values import TZ, timestamp
 from .workouts import build_workouts
@@ -27,15 +28,6 @@ class DeriveReport:
     notes_created: bool = False
     as_of: date | None = None
     warnings: list[str] = field(default_factory=list)
-
-
-def resolve_data_dir(data_dir: Path) -> Path:
-    """Accept the data repo root or its ``data/`` folder."""
-    data_dir = Path(data_dir)
-    for candidate in (data_dir, data_dir / "data"):
-        if any((candidate / sub).is_dir() for sub in ("daily", "sleep", "workouts")):
-            return candidate
-    raise FileNotFoundError(f"no daily/, sleep/ or workouts/ folder under {data_dir}")
 
 
 def default_as_of(data_dir: Path) -> date:

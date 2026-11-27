@@ -10,6 +10,7 @@ timestamps, never from point counts:
   apart; speed, walking time and smoothed altitude never reach across a break.
 
 Latitude and longitude are never read: only whether a point has a position.
+Nothing here reads files: parse_points takes the bytes derive/load.py read.
 """
 
 from __future__ import annotations
@@ -22,7 +23,6 @@ from dataclasses import dataclass
 from datetime import datetime
 from itertools import pairwise
 from math import fsum
-from pathlib import Path
 from typing import Any
 
 from .values import local_iso, num, timestamp
@@ -48,11 +48,12 @@ def _local(tag: object) -> str:
     return tag.rsplit("}", 1)[-1] if isinstance(tag, str) else ""
 
 
-def read_points(path: Path) -> list[Point] | None:
-    """Trackpoints of a gzipped TCX file, sorted by time; None if unreadable."""
+def parse_points(gz: bytes) -> list[Point] | None:
+    """Trackpoints of a gzipped TCX document, sorted by time; None if it cannot be parsed."""
     try:
-        root = ET.fromstring(gzip.decompress(Path(path).read_bytes()))  # noqa: S314 - ElementTree never loads external entities and expat >= 2.4.1 refuses entity-expansion attacks; test_xml_entity_attacks_are_refused checks both
-    except (OSError, EOFError, zlib.error, ET.ParseError):  # zlib.error: broken deflate stream
+        root = ET.fromstring(gzip.decompress(gz))  # noqa: S314 - ElementTree never loads external entities and expat >= 2.4.1 refuses entity-expansion attacks; test_xml_entity_attacks_are_refused checks both
+    # BadGzipFile is an OSError; a broken deflate stream raises zlib.error, a cut one EOFError.
+    except (OSError, EOFError, zlib.error, ET.ParseError):
         return None
     by_time: dict[float, Point] = {}
     for tp in root.iter():

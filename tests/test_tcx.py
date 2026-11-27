@@ -4,12 +4,12 @@ import gzip
 import json
 
 import pytest
+from derive_fixtures import read_points
 from fakes import FakeResponse, FakeSession
 
 from google_health_claude.api.client import HealthClient
 from google_health_claude.api.credentials import Credentials
 from google_health_claude.cli import build_parser
-from google_health_claude.derive.points import read_points
 from google_health_claude.devtools.probe_tcx import load_workouts, pick_workouts, probe_tcx
 from google_health_claude.fetch.tcx import summarize_tcx
 from google_health_claude.records import exercise_id
