@@ -3,7 +3,7 @@ import json
 import pytest
 
 from google_health_claude.api.credentials import CredentialsError, load_credentials
-from google_health_claude.store import merge_items, write_if_changed
+from google_health_claude.fetch.store import merge_items, write_if_changed
 
 
 def test_write_if_changed(tmp_path):

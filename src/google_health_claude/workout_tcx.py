@@ -32,8 +32,8 @@ from pathlib import Path
 from typing import Any
 
 from .api.client import HealthApiError
+from .fetch.store import day_path, load_json, write_bytes_if_changed, write_if_changed
 from .records import exercise_id, tcx_eligible
-from .store import day_path, load_json, write_bytes_if_changed, write_if_changed
 from .tcx import summarize_tcx
 
 INDEX_NAME = "_end_times.json"

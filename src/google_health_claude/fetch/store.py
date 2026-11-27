@@ -7,10 +7,12 @@ import os
 from collections.abc import Callable
 from datetime import date
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
+
+Item = TypeVar("Item")
 
 
-def dumps(payload: Any) -> str:
+def dumps(payload: object) -> str:
     return json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
 
 
@@ -24,7 +26,7 @@ def load_json(path: Path) -> Any | None:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def write_if_changed(path: Path, payload: Any) -> bool:
+def write_if_changed(path: Path, payload: object) -> bool:
     """Write ``payload`` to ``path``. Returns True if the file changed.
 
     The new content goes to a temporary file first and is then swapped in, so an
@@ -53,14 +55,16 @@ def write_bytes_if_changed(path: Path, content: bytes) -> bool:
     return True
 
 
-def _item_key(item: Any) -> str:
+def _item_key(item: object) -> str:
     # Google APIs usually give each resource a unique "name" (not yet confirmed
     # for Google Health data points). Without one, the whole item is its identity.
     name = item.get("name") if isinstance(item, dict) else None
     return name if isinstance(name, str) and name else dumps(item)
 
 
-def merge_items(existing: list, new: list, key: Callable[[Any], str | None] | None = None) -> list:
+def merge_items(
+    existing: list[Item], new: list[Item], key: Callable[[Item], str | None] | None = None
+) -> list[Item]:
     """Merge ``new`` into ``existing`` without dropping anything already stored.
 
     Items with the same identity are replaced in place by their new version;
@@ -69,12 +73,12 @@ def merge_items(existing: list, new: list, key: Callable[[Any], str | None] | No
     identity (e.g. a sample timestamp); when it returns None the default is used.
     """
 
-    def identity(item: Any) -> str:
+    def identity(item: Item) -> str:
         custom = key(item) if key else None
         return custom if custom else _item_key(item)
 
     new_by_key = {identity(item): item for item in new}
-    merged: list = []
+    merged: list[Item] = []
     seen: set[str] = set()
     for item in [*existing, *new]:
         key_ = identity(item)

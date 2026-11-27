@@ -21,8 +21,8 @@ from google_health_claude.derive import derive
 from google_health_claude.derive.points import read_points
 from google_health_claude.derive.values import TZ, timestamp
 from google_health_claude.fetch import run as fetch
+from google_health_claude.fetch.store import load_json
 from google_health_claude.records import tcx_eligible
-from google_health_claude.store import load_json
 from google_health_claude.workout_tcx import INDEX_NAME, gzip_bytes
 
 SEED = 5  # not the golden seed: these checks must hold for any seed
